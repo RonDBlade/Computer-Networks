@@ -18,6 +18,11 @@
     transmitted to the server using TCP connection. At the end of the transmission, the program
     recives the amount of printable characters that were in the stream of characters it sent to the server,
     and it prints the total number it recived.
+
+    For printing user details:
+        strcat(strcat(strcat(login_message, "Hi "), user_name), ", good to see you.\n");
+        strcat(login_message, "Failed to login.\n");
+
 */
 
 #define MAX_CHARS_EXPECTED 11//An unsigned int can have at most 12 bytes in string representation (12 digits)

@@ -25,6 +25,7 @@
 #define MAX_USER_INPUT 16
 #define MAX_COURSE_NAME 100
 #define MAX_RATE_TEXT 1024
+#define MAX_CMD_LENGTH 16
 #define WELCOME_MESSAGE "Welcome! Please log in.\n"
 
 //-----Globals-----
@@ -119,13 +120,13 @@ int write_to_client(int conn_fd, char* buffer){
 
 //-----Client Handling-----
 
-int process_login(int conn_fd, char* users_path){
+int process_login(int conn_fd, char* users_path, char* user_name){
 	char* line = 0;
 	size_t len = 0;
 	ssize_t read;
 	unsigned int message_length;
 	char header[MAX_CHARS_EXPECTED] = {0};
-    char user_name[MAX_USER_INPUT] = {0}, password[MAX_USER_INPUT] = {0};
+    char input_name[MAX_USER_INPUT] = {0}, input_password[MAX_USER_INPUT] = {0};
     char file_user[MAX_USER_INPUT] = {0}, file_password[MAX_USER_INPUT] = {0};
 	char* login_status = "1";
     FILE* user_details;
@@ -133,76 +134,107 @@ int process_login(int conn_fd, char* users_path){
         perror("Error reading user file\n");
         return 1;
     }
+    write_to_client(conn_fd, WELCOME_MESSAGE);
 	while (strcmp(login_status, "0")){
-        if (read_from_client(conn_fd, user_name)){
+        rewind(user_details);
+        if (read_from_client(conn_fd, input_name)){
             return 1;
         }
-        if (read_from_client(conn_fd, password)){
+        if (read_from_client(conn_fd, input_password)){
             return 1;
         }
         while((read = getline(&line, &len, user_details)) != -1){
             if (sscanf(line, "%s    %s", file_user, file_password) != -1){
-                if (!strcmp(file_user, user_name) && !strcmp(file_password, password)){
+                if (!strcmp(file_user, input_name) && !strcmp(file_password, input_password)){
                     login_status = "0";
+                    user_name = input_name;
                 }
             }
 	    }
+        write_to_client(conn_fd, login_status); // Will tell client side if login was successfull or not
     }
     fclose(user_details);
-    write_to_client(conn_fd, login_status);
 }
 
-int process_client(int conn_fd, char* users_path, char* dir_path){
-    unsigned int C = 0;
-    unsigned int total_bytes_passed = 0;
-    char header[MAX_CHARS_EXPECTED] = {0};
-    unsigned int message_length;
-    char *user_name;
-    //The header will tell the server/client how much bytes it should read
-    unsigned int message_length = strlen(WELCOME_MESSAGE);
-    sprintf(header, "%010u", message_length);
-    if (write_header(conn_fd, message_length)){
-    	perror("Error sending header");
-    	return 1;
+int print_courses(int conn_fd){
+    char *file_line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    FILE* course_list;
+    if (!(course_list = fopen("./course_list", "r"))){
+        // Sending 0 to client will indicate end of course list
+        if (write_to_client(conn_fd, "0")){
+            return 1;
+        }
     }
-    if (write_message(conn_fd, WELCOME_MESSAGE)){
-    	perror("Error displaying welcome message\n");
-    	return 1;
+    while ((read = getline(&file_line, &len, course_list)) != -1){
+        if (write_to_client(conn_fd, file_line)){
+            free(file_line);
+            fclose(course_list);
+            return 1;
+        }
     }
-    process_login(conn_fd, users_path);
+    if (ferror(course_list)){
+        perror("Error reading courses file");
+        free(file_line);
+        fclose(course_list);
+        return 1;
+    }
+    if (write_to_client(conn_fd, "0")){
+        free(file_line);
+        fclose(course_list);
+        return 1;
+    }
+    free(file_line);
+    fclose(course_list);
+    return 0;
+}
 
-	length = (unsigned int) strtol(header, NULL, 10);
-	if (length < 2<<20)//Bitwise operation! 2<<20=2MB
-		buff_size = length;
-	else//We assume allocating 2MB is possible, if there is more data, we'll handle it in chunks
-		buff_size = 2<<20;
-	buffer = (char *) malloc(buff_size + 1);
-	if (buffer == NULL){
-		fprintf(stderr, "Error allocating memory\n");
-		return 1;
-	}
-	else{
-		memset(buffer, 0, buff_size + 1);
-		//We can start reading and processing the bytes from the client
-		while (total_bytes_passed < length){
-			if (length - total_bytes_passed < buff_size)//If the remaining amount to send is less than the buffer size, update the maximum buffer space to be used
-				buff_size = length - total_bytes_passed;
-			if (read_message(conn_fd, buffer, buff_size)){
-				perror("Error reading from client\n");
-				return 1;
-			}
-			//We have a chunk of buff_size to process
-			else
-				C += find_printable(pcc_total, buffer, buff_size);
-			total_bytes_passed += buff_size;
-			//By now, a chunk of buff_size was processed by the server
-		}
-		//By now, all the data from the client has been processed
-		memset(header, 0, MAX_CHARS_EXPECTED);
-		sprintf(header, "%012u", C);
-		write_header(conn_fd, header);
-		return 0;
-	}
+int add_course(int conn_fd){
+
+}
+
+int rate_course(int conn_fd, char* user_name){
+
+}
+
+int get_rate(int conn_fd){
+
+}
+
+int process_client(int conn_fd, char* users_path){
+    char user_name[MAX_USER_INPUT] = {0};
+    char input_cmd[MAX_CMD_LENGTH] = {0};
+    // The header will tell the server/client how much bytes it should read
+    if (process_login(conn_fd, users_path, user_name)){
+        return 1;
+    }
+    // user_name now has the logged in user name
+    while (strcmp(read_from_client(conn_fd, input_cmd), "quit")){
+        if (strcmp(input_cmd, "list_of_courses")){
+            if (print_courses(conn_fd)){
+                return 1;
+            }
+        }
+        else if (strcmp(input_cmd, "add_course")){
+            if (add_course){
+                return 1;
+            }
+        }
+        else if (strcmp(input_cmd, "rate_course")){
+            if (rate_course(conn_fd, user_name)){
+                return 1;
+            }
+        }
+        else if (strcmp(input_cmd, "get_rate")){
+            if (get_rate(conn_fd)){
+                return 1;
+            }
+        }
+        // If none is true, the command is illegal and client shouldn't send it
+    }
+    // Connection will be closed in main (where it was opened), any dynamic allocations should be freed here
+    return 0;
 }
 
 int main(int argc, char *argv[]){
@@ -256,6 +288,11 @@ int main(int argc, char *argv[]){
         close(listen_fd);
         return 1;
     }
+    if (chdir(argv[2])){ // Change current working directory to provided path to handle files as local
+        perror("Error using given directory to server\n");
+        close(listen_fd);
+        return 1;
+    }
     while (listen_fd != -1){
         conn_fd = accept(listen_fd, (struct sockaddr*) &peer_address, &address_size);
         if (conn_fd < 0){
@@ -264,7 +301,7 @@ int main(int argc, char *argv[]){
             }
         }
         else{
-            if (process_client(conn_fd, argv[1], argv[2])){
+            if (process_client(conn_fd, argv[1])){
                 fprintf(stderr, "Error processing client\n");
             }
 			close(conn_fd);
