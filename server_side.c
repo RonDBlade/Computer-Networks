@@ -23,6 +23,7 @@
 #define MAX_CHARS_EXPECTED 11 // Used to transfer how many characters to read in header. An unsigned int can have at most 10 bytes + '\0' in string representation (10 digits)
 #define MAX_CONNECTIONS 25
 #define MAX_USER_INPUT 16
+#define MAX_COURSE_NUMBER 5
 #define MAX_COURSE_NAME 100
 #define MAX_RATE_TEXT 1024
 #define MAX_CMD_LENGTH 16
@@ -190,8 +191,53 @@ int print_courses(int conn_fd){
     return 0;
 }
 
-int add_course(int conn_fd){
+int check_course_exists(char* input_number){
+    char *file_line = NULL;
+    char *course_number;
+    size_t len = 0;
+    ssize_t read;
+    FILE* course_list;
+    if (!(course_list = fopen("./course_list", "r"))){
+        // Course file hasn't been made - no course exists
+        return 0;
+    }
+    while ((read = getline(&file_line, &len, course_list)) != -1){
+        if (sscanf(file_line, "%s", course_number) != -1){
+            if (!strcmp(input_number, course_number)){ // Found course
+                free(file_line);
+                fclose(course_list);
+                return 1;
+            }
+        }
+    }
+    if (ferror(course_list)){
+        perror("Error reading courses file");
+        free(file_line);
+        fclose(course_list);
+        return -1;
+    }
+    free(file_line);
+    fclose(course_list);
+    return 0;
+}
 
+int add_course(int conn_fd){
+    char course_number[MAX_COURSE_NUMBER];
+    char course_name[MAX_COURSE_NAME];
+    FILE* course_list;
+    if (read_from_client(conn_fd, course_number)){
+        return 1;
+    }
+    if (read_from_client(conn_fd, course_name)){
+        return 1;
+    }
+    if (check_course_exists(course_number) == 1){
+        return write_to_client(conn_fd, "1"); // Client will print that course_number exists
+    }
+    if (!(course_list = fopen("./course_list", "a"))){
+        return 1;
+    }
+    fprintf(course_list, )// TODO finish this statement
 }
 
 int rate_course(int conn_fd, char* user_name){
