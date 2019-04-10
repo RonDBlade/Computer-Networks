@@ -81,11 +81,11 @@ int send_to_server(unsigned int length, unsigned int buff_size, int randfd, char
 
 //-----Header Read/Write-----
 
-int write_header(int sockfd, char* header){
+int write_header(int conn_fd, char* header){
     int bytes_passed = 0;
     int current_pass = 0;
     while (bytes_passed < MAX_CHARS_EXPECTED){
-        current_pass += write(sockfd, header + bytes_passed, MAX_CHARS_EXPECTED - bytes_passed);
+        current_pass = write(conn_fd, header + bytes_passed, MAX_CHARS_EXPECTED - bytes_passed);
         if (current_pass < 0)
             return 1;
         bytes_passed += current_pass;
@@ -93,18 +93,80 @@ int write_header(int sockfd, char* header){
     return 0;
 }
 
-int read_header(int sockfd, char* header){
+int read_header(int conn_fd, char *header){
     int bytes_passed = 0;
     int current_pass = 0;
-    while (bytes_passed < MAX_CHARS_EXPECTED ){//Read whole 12 digit number of C
-        current_pass = read(sockfd, header, MAX_CHARS_EXPECTED - bytes_passed);
+    while (bytes_passed < MAX_CHARS_EXPECTED){ //Read whole 11 digit number of C
+        current_pass = read(conn_fd, header + bytes_passed, MAX_CHARS_EXPECTED - bytes_passed);
         if (current_pass <= 0){
-            perror("Error reading from socket");
+            perror("Error reading from socket);
             return 1;
         }
         bytes_passed += current_pass;
     }
     header[bytes_passed] = '\0';
+    return 0;
+}
+
+
+
+
+//-----Buffer Filler-----
+
+int read_message(int conn_fd, char* buffer, unsigned int buff_size){
+    unsigned int bytes_passed = 0;
+    int current_pass = 0;
+    while (bytes_passed < buff_size){
+        current_pass = read(conn_fd, buffer + bytes_passed, buff_size - bytes_passed);
+        if (current_pass <= 0)
+            return 1;
+        bytes_passed += current_pass;
+    }
+    buffer[bytes_passed] = '\0';
+    return 0;
+}
+
+int write_message(int conn_fd, char* buffer, unsigned int buff_size){
+    int bytes_passed = 0;
+    int current_pass = 0;
+    while (bytes_passed < buff_size){
+        current_pass = write(conn_fd, buffer + bytes_passed, buff_size - bytes_passed);
+        if (current_pass < 0)
+            return 1;
+        bytes_passed += current_pass;
+    }
+    return 0;
+}
+
+//-----Helper Functions-----
+
+int read_from_server(int conn_fd, char* buffer){
+    unsigned int message_length;
+    char header[MAX_CHARS_EXPECTED] = {0};
+    if (read_header(conn_fd, header)){
+        perror("Error reading header from client\n");
+        return 1;
+    }
+    message_length = strtoul(header, NULL, 10);
+    if (read_message(conn_fd, buffer, message_length)){
+        perror("Error reading message\n");
+        return 1;
+    }
+    return 0;
+}
+
+int write_to_server(int conn_fd, char* buffer){
+    unsigned int message_length = strlen(buffer);
+    char header[MAX_CHARS_EXPECTED] = {0};
+    sprintf(header, "%011u", message_length);
+    if (write_header(conn_fd, header)){
+        perror("Error writing header to client\n");
+        return 1;
+    }
+    if (write_message(conn_fd, buffer, message_length)){
+        perror("Error reading message\n");
+        return 1;
+    }
     return 0;
 }
 
