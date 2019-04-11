@@ -48,7 +48,6 @@ int read_header(int conn_fd, char *header){
     return 0;
 }
 
-
 int write_header(int conn_fd, char* header){
     int bytes_passed = 0;
     int current_pass = 0;
@@ -90,7 +89,7 @@ int write_message(int conn_fd, char* buffer, unsigned int buff_size){
 
 //-----Helper Functions-----
 
-int read_from_server(int conn_fd, char* buffer){
+int read_from_server(int conn_fd, char* buffer){//USE THIS TO READ FROM SERVER.OTHERS ARE HELPER FUNCTIONS
     unsigned int message_length;
     char header[MAX_CHARS_EXPECTED] = {0};
     if (read_header(conn_fd, header)){
@@ -105,7 +104,7 @@ int read_from_server(int conn_fd, char* buffer){
     return 0;
 }
 
-int write_to_server(int conn_fd, char* buffer){
+int write_to_server(int conn_fd, char* buffer){//USE THIS TO WRITE TO SERVER.OTHERS ARE HELPER FUNCTIONS
     unsigned int message_length = strlen(buffer);
     char header[MAX_CHARS_EXPECTED] = {0};
     sprintf(header, "%011u", message_length);
@@ -120,10 +119,27 @@ int write_to_server(int conn_fd, char* buffer){
     return 0;
 }
 
+int moreThanOne(char* buffer,int len,int start){//checks if we have more than one space in the input
+    int i;
+    for(i=start+1;i<len;i++){
+        if(buffer[i]==' ')
+           return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[]){
     //starting with setting up variables depending on cmd input
     uint16_t port;
 	char* hostname;
+    char* buff1=NULL;
+    char tmparr[16],user[16],password[16];//
+    struct sockaddr_in server_address;
+    size_t len=0;
+    int nread=0;
+	struct hostent *he;
+    int sockfd = -1;
+	
     if(argc==1){
 		hostname = "localhost";
 		port=1337;
@@ -139,22 +155,18 @@ int main(int argc, char *argv[]){
         printf("Too many command line arguments\n");
         return 1;
     }
-	
-	struct sockaddr_in server_address;
-	struct hostent *he;
-    int sockfd = -1;
-    
+
     //Creating a TCP socket
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         perror("Error in socket()\n");
         return 1;
     }
-
+    
+    //missing an argument of the IP?
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
     //Converting input to network address
-	
     if (!inet_aton(hostname, &(server_address.sin_addr))){
 		if ((he = gethostbyname(hostname)) == NULL){
 			perror("Error resolving hostname\n");
@@ -170,35 +182,48 @@ int main(int argc, char *argv[]){
 
     //NOW WE NEED TO DEAL WITH RECEIVING AND SENDING TO THE SERVER
     //FIRST DEAL WITH USER+PASS
-    
+    while(1){//keep going until the user gives us good user and pass.do break; when he does.
+    getline(&buff1,&len,stdin);//getline from user.
+    strncpy(tmparr,buff1,5);
+    if(strcmp(*tmparr,"User:")){
+        printf("Please enter your username\n");
+        continue;
+    }
+    if(buff1[5]!=' ' || moreThanOne(buff1,len,5)){
+        printf("Invalid Input\n");
+        continue;
+    }
+    strncpy(user,buff1+6,len-6);
     
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
-    sprintf(header, "%012u", length);
-    if (write_header(sockfd, header)){
-        perror("Error writing to socket\n");
+    while(1){//when user inputs "quit",do break;CHANGE WHAT THAT IS INSIDE IT IS OLD WHAT THE FUCK IS GOING ON
+        sprintf(header, "%012u", length);
+        if (write_header(sockfd, header)){
+            perror("Error writing to socket\n");
+            free(rand_buffer);
+            close(sockfd);
+            close(randfd);
+            return 1;
+        }
+        //By now, header sent to server, and the server knows how much to read
+        if (send_to_server(length,  buff_size, randfd, rand_buffer, sockfd)){
+            free(rand_buffer);
+            close(sockfd);
+            close(randfd);
+            return 1;
+        }
+        //By now, length chars were transferred to server, wait for an answer
         free(rand_buffer);
-        close(sockfd);
         close(randfd);
-        return 1;
-    }
-    //By now, header sent to server, and the server knows how much to read
-    if (send_to_server(length,  buff_size, randfd, rand_buffer, sockfd)){
-        free(rand_buffer);
+        memset(header, 0 ,MAX_CHARS_EXPECTED + 1);//Reset length-to-string buffer so it can be used in a reversed way
+        if (read_header(sockfd, header)){
+            close(sockfd);
+            return 1;
+        }
         close(sockfd);
-        close(randfd);
-        return 1;
+        C = strtoul(header, NULL, 10);
+        printf("# of printable characters: %u\n", C);//Print the answer
+        return 0;
     }
-    //By now, length chars were transferred to server, wait for an answer
-    free(rand_buffer);
-    close(randfd);
-    memset(header, 0 ,MAX_CHARS_EXPECTED + 1);//Reset length-to-string buffer so it can be used in a reversed way
-    if (read_header(sockfd, header)){
-        close(sockfd);
-        return 1;
-    }
-    close(sockfd);
-    C = strtoul(header, NULL, 10);
-    printf("# of printable characters: %u\n", C);//Print the answer
-    return 0;
 }
