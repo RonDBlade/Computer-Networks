@@ -127,6 +127,7 @@ int main(int argc, char *argv[]){
     char user[16],password[16];
     size_t len=0;
     int nread=0;
+	int count;
     char input[1046]//setting max size for input,using the longest command,which takes 11 to name it,1024 chars for rating text,max size of course is 4,3 for rate number,1 for \0,3 spaces
     char delimiter[5]=" \t\r\n";
 	char* hostname;
@@ -230,13 +231,42 @@ int main(int argc, char *argv[]){
 			printf("Invalid input\n");
 			continue;
 		}
+		write_to_server(sockfd, token);
+		read_from_server(sockfd, buff1);
 		//else send token to the server
 	}
 	else if(strcmp(token,"add_course")){
 		//append things to input[] array and send to server
+		count=0;
+		strcpy(input,token);
+		count+=strlen(token);
+		input[count]=' ';
+		strtok(NULL,delimiter);
+		strcpy(input+count+1,token);
+		count+=strlen(token)+1;
+		input[count]=' ';
+		strtok(NULL,delimiter);
+		strcpy(input+count+1,token);
+		write_to_server(sockfd, input;
+		read_from_server(sockfd, buff1);
 	}
 	else if(strcmp(token,"rate_course")){
-		//append things to input[] array and send to server
+		count=0;
+		strcpy(input,token);
+		count+=strlen(token);
+		input[count]=' ';
+		strtok(NULL,delimiter);
+		strcpy(input+count+1,token);
+		count+=strlen(token)+1;
+		input[count]=' ';
+		strtok(NULL,delimiter);
+		strcpy(input+count+1,token);
+		count+=strlen(token)+1;
+		input[count]=' ';
+		strtok(NULL,delimiter);
+		strcpy(input+count+1,token);
+		write_to_server(sockfd, input;
+		read_from_server(sockfd, buff1);
 	}
 	else if(strcmp(token,"get_rate")){
 		//append things to input[] array and send to server
