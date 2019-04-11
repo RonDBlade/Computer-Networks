@@ -119,6 +119,40 @@ int write_to_client(int conn_fd, char* buffer){
     return 0;
 }
 
+int print_file_to_client(int conn_fd, char* file_name){
+    char *file_line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    FILE* output_file;
+    if (!(output_file = fopen(file_name, "r"))){
+        // Sending 0 to client will indicate end of file
+        if (write_to_client(conn_fd, "0")){
+            return 1;
+        }
+    }
+    while ((read = getline(&file_line, &len, output_file)) != -1){
+        if (write_to_client(conn_fd, file_line)){
+            free(file_line);
+            fclose(output_file);
+            return 1;
+        }
+    }
+    if (ferror(output_file)){
+        perror("Error reading courses file");
+        free(file_line);
+        fclose(output_file);
+        return 1;
+    }
+    if (write_to_client(conn_fd, "0")){
+        free(file_line);
+        fclose(output_file);
+        return 1;
+    }
+    free(file_line);
+    fclose(output_file);
+    return 0;
+}
+
 //-----Client Handling-----
 
 int process_login(int conn_fd, char* users_path, char* user_name){
@@ -158,37 +192,7 @@ int process_login(int conn_fd, char* users_path, char* user_name){
 }
 
 int print_courses(int conn_fd){
-    char *file_line = NULL;
-    size_t len = 0;
-    ssize_t read;
-    FILE* course_list;
-    if (!(course_list = fopen("./course_list", "r"))){
-        // Sending 0 to client will indicate end of course list
-        if (write_to_client(conn_fd, "0")){
-            return 1;
-        }
-    }
-    while ((read = getline(&file_line, &len, course_list)) != -1){
-        if (write_to_client(conn_fd, file_line)){
-            free(file_line);
-            fclose(course_list);
-            return 1;
-        }
-    }
-    if (ferror(course_list)){
-        perror("Error reading courses file");
-        free(file_line);
-        fclose(course_list);
-        return 1;
-    }
-    if (write_to_client(conn_fd, "0")){
-        free(file_line);
-        fclose(course_list);
-        return 1;
-    }
-    free(file_line);
-    fclose(course_list);
-    return 0;
+    return print_file_to_client(conn_fd, "./course_list");
 }
 
 int check_course_exists(char* input_number){
@@ -235,17 +239,59 @@ int add_course(int conn_fd){
         return write_to_client(conn_fd, "1"); // Client will print that course_number exists
     }
     if (!(course_list = fopen("./course_list", "a"))){
+        perror("Error opening file");
         return 1;
     }
-    fprintf(course_list, )// TODO finish this statement
+    if (fprintf(course_list, "%s:\t%s\n", course_number, course_name) < 0){
+        perror("Error writing to file");
+        return 1;
+    }
+    if (close(course_list)){
+        perror("Error closing file");
+        return 1;
+    }
+    return 0;
 }
 
 int rate_course(int conn_fd, char* user_name){
-
+    char course_number[MAX_COURSE_NUMBER];
+    char rating_value[4];
+    char rating_text[MAX_RATE_TEXT];
+    FILE* course_file;
+    if (read_from_client(conn_fd, course_number)){
+        return 1;
+    }
+    if (read_from_client(conn_fd, rating_value)){
+        return 1;
+    }
+    if (read_from_client(conn_fd, rating_text)){
+        return 1;
+    }
+    char file_name[2 + MAX_COURSE_NUMBER];
+    strcat(strcat(file_name, "./"), course_number);
+    if (!(course_file = fopen(file_name))){
+        perror("Error opening file");
+        return 1;
+    }
+    if (fprintf(course_file, "%s:\t%s\t%s", user_name, rating_value, rating_text) < 0){
+        perror("Error writing to file");
+        return 1;
+    }
+    if (fclose(course_file){
+        perror("Error closing file");
+        return 1;
+    }
+    return 0;
 }
 
 int get_rate(int conn_fd){
-
+    char course_number[MAX_COURSE_NUMBER];
+    char file_name[2 + MAX_COURSE_NUMBER];
+    if (read_from_client(conn_fd, course_number)){
+        return 1;
+    }
+    strcat(strcat(file_name, "./"), course_number);
+    return print_file_to_client(conn_fd, file_name);
 }
 
 int process_client(int conn_fd, char* users_path){
@@ -277,7 +323,7 @@ int process_client(int conn_fd, char* users_path){
                 return 1;
             }
         }
-        // If none is true, the command is illegal and client shouldn't send it
+        // If none of them is true, the command is illegal and client shouldn't send it
     }
     // Connection will be closed in main (where it was opened), any dynamic allocations should be freed here
     return 0;
