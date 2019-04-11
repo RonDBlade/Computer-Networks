@@ -171,8 +171,22 @@ int write_to_server(int conn_fd, char* buffer){
 }
 
 int main(int argc, char *argv[]){
-    assert(argc == 4);
-    uint16_t port = (unsigned short) strtoul(argv[2], NULL, 10);
+    //starting with setting up variables depending on cmd input
+    uint16_t port
+    if(argc==1){
+       
+       port=1337;
+    }
+    else if(arc==2)
+        port=1337;
+    else if(arc==3){
+    uint16_t port = (unsigned short) strtoul(argv[2], NULL, 10);//might not be exactly what we need,idk what strtoul does exactly
+    //line reserved for the hostname
+    }
+    else{//if over 2 cmd args
+        printf("Too many command line arguments\n");
+        return 1;
+    }
     unsigned int length = (unsigned int) strtol(argv[3], NULL, 10);
     unsigned int buff_size = 0;
     unsigned int C = 0;
@@ -221,7 +235,11 @@ int main(int argc, char *argv[]){
         close(sockfd);
         return 1;
     }
-
+    //NOW WE NEED TO DEAL WITH RECEIVING AND SENDING TO THE SERVER
+    //FIRST DEAL WITH USER+PASS
+    
+    
+    //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     sprintf(header, "%012u", length);
     if (write_header(sockfd, header)){
