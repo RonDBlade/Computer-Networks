@@ -95,7 +95,6 @@ int read_from_server(int conn_fd, char* buffer){//USE THIS TO READ FROM SERVER.O
     char header[MAX_CHARS_EXPECTED] = {0};
     if (read_header(conn_fd, header)){
         perror("Error reading header from server\n");
-printf("Current header from server: %s", header);
         return 1;
     }
     message_length = strtoul(header, NULL, 10);
@@ -357,6 +356,13 @@ int main(int argc, char *argv[]){
 				continue;
 			}
 			if (write_to_server(sockfd, course_number)){
+				continue;
+			}
+			if (read_from_server(sockfd, server_response)){
+				continue;
+			}
+			if (strcmp(server_response, "0")){
+				printf("%s doesn't exists in the database! No ratings are available!\n", course_number);
 				continue;
 			}
 			if (read_file_from_server(sockfd) == -1){

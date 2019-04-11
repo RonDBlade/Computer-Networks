@@ -255,9 +255,10 @@ int add_course(int conn_fd){
 }
 
 int rate_course(int conn_fd, char* user_name){
-    char course_number[MAX_COURSE_NUMBER];
-    char rating_value[4];
-    char rating_text[MAX_RATE_TEXT];
+    char course_number[MAX_COURSE_NUMBER] = {0};
+    char rating_value[4] = {0};
+    char rating_text[MAX_RATE_TEXT] = {0};
+    char file_name[2 + MAX_COURSE_NUMBER] = {0};
     FILE* course_file;
     if (read_from_client(conn_fd, course_number)){
         return 1;
@@ -271,13 +272,12 @@ int rate_course(int conn_fd, char* user_name){
     if (check_course_exists(course_number) != 1){
         return write_to_client(conn_fd, "1"); // Client will print that course_number doesn't exists in database
     }
-    char file_name[2 + MAX_COURSE_NUMBER];
     strcat(strcat(file_name, "./"), course_number);
     if (!(course_file = fopen(file_name, "a"))){
         perror("Error opening file");
         return 1;
     }
-    if (fprintf(course_file, "%s:\t%s\t%s", user_name, rating_value, rating_text) < 0){
+    if (fprintf(course_file, "%s:\t%s\t%s\n", user_name, rating_value, rating_text) < 0){
         perror("Error writing to file");
         return 1;
     }
@@ -293,6 +293,12 @@ int get_rate(int conn_fd){
     char file_name[2 + MAX_COURSE_NUMBER] = {0};
     if (read_from_client(conn_fd, course_number)){
         return 1;
+    }
+    if (check_course_exists(course_number) != 1){
+        return write_to_client(conn_fd, "1"); // Client will print that course_number doesn't exists in database
+    }
+    if (write_to_client(conn_fd, "0")){
+	return 1;
     }
     strcat(strcat(file_name, "./"), course_number);
     return print_file_to_client(conn_fd, file_name);
