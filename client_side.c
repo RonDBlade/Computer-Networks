@@ -25,61 +25,29 @@
 
 */
 
-#define MAX_CHARS_EXPECTED 11//An unsigned int can have at most 12 bytes in string representation (12 digits)
-
-//-----Random Number Generator (RNG)
-
-int generate_random_buffer(int randfd, char* rand_buffer, unsigned int buff_size){
-    unsigned int bytes_passed = 0;
-    int current_pass = 0;
-    while (bytes_passed < buff_size){
-        current_pass = read(randfd, rand_buffer + bytes_passed, buff_size - bytes_passed);
-        if (current_pass <= 0)//Reading from urandom shouldn't return 0
-            return 1;
-        bytes_passed += current_pass;
-    }
-    return 0;
-}
-
-//-----Buffer Sender-----
-
-int send_chunk(int sockfd, char* rand_buffer, unsigned int buff_size){
-    unsigned int bytes_passed = 0;
-    int current_pass = 0;
-    while (bytes_passed < buff_size){
-        current_pass = write(sockfd, rand_buffer + bytes_passed, buff_size - bytes_passed);
-        if (current_pass < 0)
-            return 1;
-        bytes_passed += current_pass;
-    }
-    return 0;
-}
-
-//-----Server Handling-----
-
-int send_to_server(unsigned int length, unsigned int buff_size, int randfd, char * rand_buffer, int sockfd){
-    unsigned int total_bytes_passed = 0;
-    while (total_bytes_passed < length){
-        if (length - total_bytes_passed < buff_size)//If the remaining amount to send is less than the buffer size, update the maximum buffer space to be used
-            buff_size = length - total_bytes_passed;
-        //Read random numbers to buffer and send from buffer so no data will be lost (read/write not full)
-        if (generate_random_buffer(randfd, rand_buffer, buff_size)){
-            perror("Error reading from /dev/urandom\n");
-            return 1;
-        }
-        //The random buffer should be filled by buff_size random chars
-        //We can now send it through the socket
-        if (send_chunk(sockfd, rand_buffer, buff_size)){
-            perror("Error writing to socket\n");
-            return 1;
-        }
-        total_bytes_passed += buff_size;
-        //By now, a chunk of buff_size was passed to the server for work
-    }
-    return 0;
-}
+#define MAX_CHARS_EXPECTED 11 // Used to transfer how many characters to read in header. An unsigned int can have at most 10 bytes + '\0' in string representation (10 digits)
+#define MAX_CONNECTIONS 25
+#define MAX_USER_INPUT 16
+#define MAX_COURSE_NUMBER 5
+#define MAX_COURSE_NAME 100
+#define MAX_RATE_TEXT 1024
+#define MAX_CMD_LENGTH 16
 
 //-----Header Read/Write-----
+
+int read_header(int conn_fd, char *header){
+    int bytes_passed = 0;
+    int current_pass = 0;
+    while (bytes_passed < MAX_CHARS_EXPECTED){
+        current_pass = read(conn_fd, header + bytes_passed, MAX_CHARS_EXPECTED - bytes_passed);
+        if (current_pass <= 0)
+            return 1;
+        bytes_passed += current_pass;
+    }
+    header[bytes_passed] = '\0';
+    return 0;
+}
+
 
 int write_header(int conn_fd, char* header){
     int bytes_passed = 0;
@@ -92,24 +60,6 @@ int write_header(int conn_fd, char* header){
     }
     return 0;
 }
-
-int read_header(int conn_fd, char *header){
-    int bytes_passed = 0;
-    int current_pass = 0;
-    while (bytes_passed < MAX_CHARS_EXPECTED){ //Read whole 11 digit number of C
-        current_pass = read(conn_fd, header + bytes_passed, MAX_CHARS_EXPECTED - bytes_passed);
-        if (current_pass <= 0){
-            perror("Error reading from socket);
-            return 1;
-        }
-        bytes_passed += current_pass;
-    }
-    header[bytes_passed] = '\0';
-    return 0;
-}
-
-
-
 
 //-----Buffer Filler-----
 
@@ -144,7 +94,7 @@ int read_from_server(int conn_fd, char* buffer){
     unsigned int message_length;
     char header[MAX_CHARS_EXPECTED] = {0};
     if (read_header(conn_fd, header)){
-        perror("Error reading header from client\n");
+        perror("Error reading header from server\n");
         return 1;
     }
     message_length = strtoul(header, NULL, 10);
@@ -160,11 +110,11 @@ int write_to_server(int conn_fd, char* buffer){
     char header[MAX_CHARS_EXPECTED] = {0};
     sprintf(header, "%011u", message_length);
     if (write_header(conn_fd, header)){
-        perror("Error writing header to client\n");
+        perror("Error writing header to server\n");
         return 1;
     }
     if (write_message(conn_fd, buffer, message_length)){
-        perror("Error reading message\n");
+        perror("Error writing message\n");
         return 1;
     }
     return 0;
@@ -172,44 +122,31 @@ int write_to_server(int conn_fd, char* buffer){
 
 int main(int argc, char *argv[]){
     //starting with setting up variables depending on cmd input
-    uint16_t port
+    uint16_t port;
+	char* hostname;
     if(argc==1){
-       
-       port=1337;
+		hostname = "localhost";
+		port=1337;
     }
     else if(arc==2)
+		hostname = argv[2];
         port=1337;
     else if(arc==3){
-    uint16_t port = (unsigned short) strtoul(argv[2], NULL, 10);//might not be exactly what we need,idk what strtoul does exactly
-    //line reserved for the hostname
+		port = (unsigned short) strtoul(argv[2], NULL, 10);//might not be exactly what we need,idk what strtoul does exactly
+		hostname = argv[2];
     }
     else{//if over 2 cmd args
         printf("Too many command line arguments\n");
         return 1;
     }
-    unsigned int length = (unsigned int) strtol(argv[3], NULL, 10);
-    unsigned int buff_size = 0;
-    unsigned int C = 0;
-    struct sockaddr_in server_address;
-
-    char header[MAX_CHARS_EXPECTED+1] = {0};
+	
+	struct sockaddr_in server_address;
+	struct hostent *he;
     int sockfd = -1;
-    int randfd = -1;
-    if (length < 2<<20)//Bitwise operation! 2<<20=2MB
-        buff_size = length;
-    else//We assume allocating 2MB is possible, if there is more data, we'll handle it in chunks
-        buff_size = 2<<20;
-    char* rand_buffer = (char *) malloc(buff_size);
-    if (rand_buffer == NULL){
-        printf("Error allocating memory\n");
-        return 1;
-    }
-    memset(rand_buffer, 0, buff_size);
     
     //Creating a TCP socket
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         perror("Error in socket()\n");
-        free(rand_buffer);
         return 1;
     }
 
@@ -217,24 +154,20 @@ int main(int argc, char *argv[]){
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
     //Converting input to network address
-    if (!inet_aton(argv[1], &(server_address.sin_addr))){
-        perror("Error in inet_aton()\n");
-        free(rand_buffer);
-        return 1;
+	
+    if (!inet_aton(hostname, &(server_address.sin_addr))){
+		if ((he = gethostbyname(hostname)) == NULL){
+			perror("Error resolving hostname\n");
+			return 1;
+		}
+		memcpy(&server.sin_addr, he->h_addr_list[0], he->h_length);
     }
     //Connecting to server
     if (connect(sockfd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0){
         perror("Error in connect()\n");
-        free(rand_buffer);
         return 1;
     }
 
-    if ((randfd = open("/dev/urandom", O_RDONLY)) < 0){
-        perror("Error in open()\n");
-        free(rand_buffer);
-        close(sockfd);
-        return 1;
-    }
     //NOW WE NEED TO DEAL WITH RECEIVING AND SENDING TO THE SERVER
     //FIRST DEAL WITH USER+PASS
     
