@@ -179,7 +179,7 @@ int process_login(int conn_fd, char* users_path, char* user_name){
             return 1;
         }
         while((read = getline(&line, &len, user_details)) != -1){
-            if (sscanf(line, "%s    %s", file_user, file_password) != -1){
+            if (sscanf(line, "%s\t%s", file_user, file_password) != -1){
                 if (!strcmp(file_user, input_name) && !strcmp(file_password, input_password)){
                     login_status = "0";
                     user_name = input_name;
