@@ -206,32 +206,8 @@ int main(int argc, char *argv[]){
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;CHANGE WHAT THAT IS INSIDE IT IS OLD WHAT THE FUCK IS GOING ON
-        sprintf(header, "%012u", length);
-        if (write_header(sockfd, header)){
-            perror("Error writing to socket\n");
-            free(rand_buffer);
-            close(sockfd);
-            close(randfd);
-            return 1;
-        }
-        //By now, header sent to server, and the server knows how much to read
-        if (send_to_server(length,  buff_size, randfd, rand_buffer, sockfd)){
-            free(rand_buffer);
-            close(sockfd);
-            close(randfd);
-            return 1;
-        }
-        //By now, length chars were transferred to server, wait for an answer
-        free(rand_buffer);
-        close(randfd);
-        memset(header, 0 ,MAX_CHARS_EXPECTED + 1);//Reset length-to-string buffer so it can be used in a reversed way
-        if (read_header(sockfd, header)){
-            close(sockfd);
-            return 1;
-        }
+      
         close(sockfd);
-        C = strtoul(header, NULL, 10);
-        printf("# of printable characters: %u\n", C);//Print the answer
         return 0;
     }
 }
