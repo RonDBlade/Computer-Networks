@@ -119,6 +119,17 @@ int write_to_server(int conn_fd, char* buffer){//USE THIS TO WRITE TO SERVER.OTH
     return 0;
 }
 
+int read_file_from_server(int conn_fd){
+	char file_line[MAX_RATE_TEXT] = {0};
+	do{
+		memset(file_line, 0, MAX_RATE_TEXT);
+		read_from_server(conn_fd, file_line);
+		if (strcmp(file_line, "0")){
+			printf("%s\n", file_line);
+		}
+	}
+	while(strcmp(file_line, "0"))
+}
 
 int main(int argc, char *argv[]){
     //starting with setting up variables depending on cmd input
@@ -221,39 +232,40 @@ int main(int argc, char *argv[]){
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;
-	memset(input, 0 ,1046);
-      	getline(&buff1,&len,stdin);
-	token=strtok(buff1,delimiter);
-	//now lets check what command he has entered
-	if(strcmp(token,"list_of_courses")){
-		if(strtok(NULL,delimiter)!=NULL){
+		memset(input, 0 ,1046);
+			getline(&buff1,&len,stdin);
+		token=strtok(buff1,delimiter);
+		//now lets check what command he has entered
+		if(strcmp(token,"list_of_courses")){
+			if(strtok(NULL,delimiter)!=NULL){
+				printf("Invalid input\n");
+				continue;
+			}
+			write_to_server(sockfd, "list_of_courses");
+			read_file_from_server(sockfd);
+		}
+		else if(strcmp(token,"add_course")){
+			//append things to input[] array and send to server
+		}
+		else if(strcmp(token,"rate_course")){
+			//append things to input[] array and send to server
+		}
+		else if(strcmp(token,"get_rate")){
+			//append things to input[] array and send to server
+		}
+		else if(strcmp(token,"quit")){
+			if(strtok(NULL,delimiter)!=NULL){
+				printf("Invalid input\n");
+				continue;
+			}
+			//if we get here,then just close and clear everything,and return 0.
+			close(sockfd);
+			return 0;
+		}
+		else{
 			printf("Invalid input\n");
 			continue;
 		}
-		//else send token to the server
-	}
-	else if(strcmp(token,"add_course")){
-		//append things to input[] array and send to server
-	}
-	else if(strcmp(token,"rate_course")){
-		//append things to input[] array and send to server
-	}
-	else if(strcmp(token,"get_rate")){
-		//append things to input[] array and send to server
-	}
-	else if(strcmp(token,"quit")){
-		if(strtok(NULL,delimiter)!=NULL){
-			printf("Invalid input\n");
-			continue;
-		}
-		//if we get here,then just close and clear everything,and return 0.
-		close(sockfd);
-		return 0;
-	}
-	else{
-		printf("Invalid input\n");
-		continue;
-	}
     }
 	//this is just here to make the program compile,closing will actually happen in the "quit" command
 	close(sockfd);
