@@ -173,10 +173,15 @@ int main(int argc, char *argv[]){
         return 1;
     }
 
+	read_from_server(sockfd, buff1);
+	if (strcmp(buff1, "0")){
+		printf("Error connecting server\n");
+	}
+	printf("Welcome! Please log in.\n");
     //NOW WE NEED TO DEAL WITH RECEIVING AND SENDING TO THE SERVER
     //FIRST DEAL WITH USER+PASS
     while(1){//keep going until the user gives us good user and pass.do break; when he does.
-    getline(&buff1,&len,stdin);//getline from user.
+		getline(&buff1,&len,stdin);//getline from user.
         token=strtok(buff1,delimiter);
         if(strcmp(token,"User:")){
             printf("Invalid input,please enter username\n");
@@ -202,36 +207,20 @@ int main(int argc, char *argv[]){
             printf("Invalid input,please enter password\n");
             continue;
         }
+		// If we got here, the user entered user_name and password correctley, we send them to the server for authentication
+		write_to_server(sockfd, user);
+		write_to_server(sockfd, password);
+		read_from_server(sockfd, buff1);
+		if(!strcmp(buff1, "0")){// Server sends 0 on log in, and 1 other wise, so we ask for another username+password input.
+			break;
+		}
+		printf("Failed to login.\n");
     }
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;CHANGE WHAT THAT IS INSIDE IT IS OLD WHAT THE FUCK IS GOING ON
-        sprintf(header, "%012u", length);
-        if (write_header(sockfd, header)){
-            perror("Error writing to socket\n");
-            free(rand_buffer);
-            close(sockfd);
-            close(randfd);
-            return 1;
-        }
-        //By now, header sent to server, and the server knows how much to read
-        if (send_to_server(length,  buff_size, randfd, rand_buffer, sockfd)){
-            free(rand_buffer);
-            close(sockfd);
-            close(randfd);
-            return 1;
-        }
-        //By now, length chars were transferred to server, wait for an answer
-        free(rand_buffer);
-        close(randfd);
-        memset(header, 0 ,MAX_CHARS_EXPECTED + 1);//Reset length-to-string buffer so it can be used in a reversed way
-        if (read_header(sockfd, header)){
-            close(sockfd);
-            return 1;
-        }
-        close(sockfd);
-        C = strtoul(header, NULL, 10);
-        printf("# of printable characters: %u\n", C);//Print the answer
-        return 0;
+
     }
+	close(sockfd);
+	return 0;
 }

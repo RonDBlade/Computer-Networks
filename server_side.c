@@ -27,9 +27,6 @@
 #define MAX_COURSE_NAME 100
 #define MAX_RATE_TEXT 1024
 #define MAX_CMD_LENGTH 16
-#define WELCOME_MESSAGE "Welcome! Please log in.\n"
-
-//-----Globals-----
 
 
 //-----Header Read/Write-----
@@ -113,7 +110,7 @@ int write_to_client(int conn_fd, char* buffer){
         return 1;
     }
     if (write_message(conn_fd, buffer, message_length)){
-        perror("Error reading message\n");
+        perror("Error writing message\n");
         return 1;
     }
     return 0;
@@ -169,7 +166,7 @@ int process_login(int conn_fd, char* users_path, char* user_name){
         perror("Error reading user file\n");
         return 1;
     }
-    write_to_client(conn_fd, WELCOME_MESSAGE);
+    write_to_client(conn_fd, "0");
 	while (strcmp(login_status, "0")){
         rewind(user_details);
         if (read_from_client(conn_fd, input_name)){
@@ -297,11 +294,10 @@ int get_rate(int conn_fd){
 int process_client(int conn_fd, char* users_path){
     char user_name[MAX_USER_INPUT] = {0};
     char input_cmd[MAX_CMD_LENGTH] = {0};
-    // The header will tell the server/client how much bytes it should read
     if (process_login(conn_fd, users_path, user_name)){
         return 1;
     }
-    // user_name now has the logged in user name
+    // user_name variable now has the currentley logged in user name
     while (strcmp(read_from_client(conn_fd, input_cmd), "quit")){
         if (strcmp(input_cmd, "list_of_courses")){
             if (print_courses(conn_fd)){
