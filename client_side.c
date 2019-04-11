@@ -119,24 +119,17 @@ int write_to_server(int conn_fd, char* buffer){//USE THIS TO WRITE TO SERVER.OTH
     return 0;
 }
 
-int moreThanOne(char* buffer,int len,int start){//checks if we have more than one space in the input
-    int i;
-    for(i=start+1;i<len;i++){
-        if(buffer[i]==' ')
-           return 1;
-    }
-    return 0;
-}
 
 int main(int argc, char *argv[]){
     //starting with setting up variables depending on cmd input
-    uint16_t port;
-	char* hostname;
-    char* buff1=NULL;
-    char tmparr[16],user[16],password[16];//
-    struct sockaddr_in server_address;
+	uint16_t port;
+    char* buff1=NULL,token;
+    char user[16],password[16];
     size_t len=0;
     int nread=0;
+    char delimiter[5]=" \t\r\n";
+	char* hostname;
+    struct sockaddr_in server_address;
 	struct hostent *he;
     int sockfd = -1;
 	
@@ -184,38 +177,61 @@ int main(int argc, char *argv[]){
     //FIRST DEAL WITH USER+PASS
     while(1){//keep going until the user gives us good user and pass.do break; when he does.
     getline(&buff1,&len,stdin);//getline from user.
-    strncpy(tmparr,buff1,5);
-    if(strcmp(*tmparr,"User:")){
-        printf("Please enter your username\n");
-        continue;
+        token=strtok(buff1,delimiter);
+        if(strcmp(token,"User:")){
+            printf("Invalid input,please enter username\n");
+            continue;
+        }
+        token=strtok(buff1,delimiter);
+        strcpy(user,token);//assume user length is 15 or less
+        if(strtok(buff1,delimiter)!=NULL){//more than just "User:" and username
+            printf("Invalid input,please enter username\n");
+            continue;
+        }
+        //if we are here,then first line was OK
+        getline(&buff1,&len,stdin);
+        token=strtok(buff1,delimiter);
+        if(strcmp(token,"Password:")){
+            printf("Invalid input,please enter password\n");
+            memset(user, 0 ,16);
+            continue;
+        }
+        token=strtok(buff1,delimiter);
+        strcpy(password,token);//assume user length is 15 or less
+        if(strtok(buff1,delimiter)!=NULL){//more than just "Password:" and password
+            printf("Invalid input,please enter password\n");
+            continue;
+        }
     }
-    if(buff1[5]!=' ' || moreThanOne(buff1,len,5)){
-        printf("Invalid Input\n");
-        continue;
-    }
-    strncpy(user,buff1+6,len-6);
-    
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;CHANGE WHAT THAT IS INSIDE IT IS OLD WHAT THE FUCK IS GOING ON
         sprintf(header, "%012u", length);
         if (write_header(sockfd, header)){
             perror("Error writing to socket\n");
+            free(rand_buffer);
             close(sockfd);
+            close(randfd);
             return 1;
         }
         //By now, header sent to server, and the server knows how much to read
-        if (send_to_server(length,  buff_size, sockfd)){
+        if (send_to_server(length,  buff_size, randfd, rand_buffer, sockfd)){
+            free(rand_buffer);
             close(sockfd);
+            close(randfd);
             return 1;
         }
         //By now, length chars were transferred to server, wait for an answer
+        free(rand_buffer);
+        close(randfd);
         memset(header, 0 ,MAX_CHARS_EXPECTED + 1);//Reset length-to-string buffer so it can be used in a reversed way
         if (read_header(sockfd, header)){
             close(sockfd);
             return 1;
         }
         close(sockfd);
+        C = strtoul(header, NULL, 10);
+        printf("# of printable characters: %u\n", C);//Print the answer
         return 0;
     }
 }
