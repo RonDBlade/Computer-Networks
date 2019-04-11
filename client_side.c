@@ -261,10 +261,14 @@ int main(int argc, char *argv[]){
 			strcpy(course_number,token);
 			strtok(NULL,delimiter);
 			strcpy(course_name,token);
+			if(strtok(NULL,delimiter)!=NULL){
+				printf("Invalid input\n");
+				continue;
+			}
 			write_to_server(sockfd, cmd);
 			write_to_server(sockfd, course_number);
 			write_to_server(sockfd, course_name);
-			read_from_server(sockfd, buff1);
+			read_from_server(sockfd, input);
 			if (strcmp(input, "0")){
 				printf("%s exists in the database!\n", course_number);
 			}
@@ -283,6 +287,10 @@ int main(int argc, char *argv[]){
 			strcpy(rating_value,token);
 			strtok(NULL,delimiter);
 			strcpy(rating_text,token);
+			if(strtok(NULL,delimiter)!=NULL){
+				printf("Invalid input\n");
+				continue;
+			}
 			write_to_server(sockfd, cmd);
 			write_to_server(sockfd, course_number);
 			write_to_server(sockfd, rating_value);
@@ -293,9 +301,13 @@ int main(int argc, char *argv[]){
 			strcpy(cmd,token);
 			strtok(NULL,delimiter);
 			strcpy(course_number,token);
+			if(strtok(NULL,delimiter)!=NULL){
+				printf("Invalid input\n");
+				continue;
+			}
 			write_to_server(sockfd, cmd);
 			write_to_server(sockfd, course_number);
-			read_file_from_server;
+			read_file_from_server(sockfd);
 			}
 		else if(!strcmp(token,"quit")){
 			if(strtok(NULL,delimiter)!=NULL){
