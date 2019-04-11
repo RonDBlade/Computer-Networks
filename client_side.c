@@ -206,7 +206,23 @@ int main(int argc, char *argv[]){
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;CHANGE WHAT THAT IS INSIDE IT IS OLD WHAT THE FUCK IS GOING ON
-      
+      	getline(&buff1,&len,stdin);
+	token=strtok(buff1,delimiter);
+	//now lets check what command he has entered
+	if(strcmp(token,"list_of_courses")){
+	}
+	else if(strcmp(token,"add_course")){
+	}
+	else if(strcmp(token,"rate_course")){
+	}
+	else if(strcmp(token,"get_rate")){
+	}
+	else if(strcmp(token,"quit")){
+	}
+	else{
+		printf("Invalid input\n");
+		continue;
+	}
         close(sockfd);
         return 0;
     }
