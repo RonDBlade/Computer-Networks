@@ -118,14 +118,23 @@ int write_to_server(int conn_fd, char* buffer){//USE THIS TO WRITE TO SERVER.OTH
     return 0;
 }
 
+int moreThanOne(char* buffer,int len,int start){//checks if we have more than one space in the input
+    int i;
+    for(i=start+1;i<len;i++){
+        if(buffer[i]==' ')
+           return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[]){
     //starting with setting up variables depending on cmd input
     uint16_t port;
-    char* buff1=NULL,token;
+    char* buff1=NULL;
+    char tmparr[16],user[16],password[16];//
     struct sockaddr_in server_address;
     size_t len=0;
     int nread=0;
-    const char del=" \t\r";//maybe need more?i forgot how that works
     if(argc==1){
        
        port=1337;
@@ -178,9 +187,18 @@ int main(int argc, char *argv[]){
     //NOW WE NEED TO DEAL WITH RECEIVING AND SENDING TO THE SERVER
     //FIRST DEAL WITH USER+PASS
     while(1){//keep going until the user gives us good user and pass.do break; when he does.
-    nread=getline(&buff1,&len,stdin);//getline from user.
-    
+    getline(&buff1,&len,stdin);//getline from user.
+    strncpy(tmparr,buff1,5);
+    if(strcmp(*tmparr,"User:")){
+        printf("Please enter your username\n");
+        continue;
     }
+    if(buff1[5]!=' ' || moreThanOne(buff1,len,5)){
+        printf("Invalid Input\n");
+        continue;
+    }
+    strncpy(user,buff1+6,len-6);
+    
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;CHANGE WHAT THAT IS INSIDE IT IS OLD WHAT THE FUCK IS GOING ON
