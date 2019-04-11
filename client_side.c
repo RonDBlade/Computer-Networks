@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <netdb.h>
 
 /* 
     The program connects to the provided server with the provided port, and generates
@@ -76,7 +77,7 @@ int read_message(int conn_fd, char* buffer, unsigned int buff_size){
 }
 
 int write_message(int conn_fd, char* buffer, unsigned int buff_size){
-    int bytes_passed = 0;
+    unsigned int bytes_passed = 0;
     int current_pass = 0;
     while (bytes_passed < buff_size){
         current_pass = write(conn_fd, buffer + bytes_passed, buff_size - bytes_passed);
@@ -128,7 +129,7 @@ int read_file_from_server(int conn_fd){
 			printf("%s\n", file_line);
 		}
 	}
-	while(strcmp(file_line, "0"))
+	while(strcmp(file_line, "0"));
 }
 
 int main(int argc, char *argv[]){
@@ -139,7 +140,7 @@ int main(int argc, char *argv[]){
     size_t len=0;
     int nread=0;
 	int count;
-    char input[1046]//setting max size for input,using the longest command,which takes 11 to name it,1024 chars for rating text,max size of course is 4,3 for rate number,1 for \0,3 spaces
+    char input[1046];//setting max size for input,using the longest command,which takes 11 to name it,1024 chars for rating text,max size of course is 4,3 for rate number,1 for \0,3 spaces
     char delimiter[5]=" \t\r\n";
 	char* hostname;
 	
@@ -157,10 +158,11 @@ int main(int argc, char *argv[]){
 		hostname = "localhost";
 		port=1337;
     }
-    else if(arc==2)
+    else if(argc==2){
 		hostname = argv[2];
         port=1337;
-    else if(arc==3){
+}
+    else if(argc==3){
 		port = (unsigned short) strtoul(argv[2], NULL, 10);//might not be exactly what we need,idk what strtoul does exactly
 		hostname = argv[2];
     }
@@ -185,7 +187,7 @@ int main(int argc, char *argv[]){
 			perror("Error resolving hostname\n");
 			return 1;
 		}
-		memcpy(&server.sin_addr, he->h_addr_list[0], he->h_length);
+		memcpy(&server_address.sin_addr, he->h_addr_list[0], he->h_length);
     }
     //Connecting to server
     if (connect(sockfd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0){

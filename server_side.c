@@ -73,7 +73,7 @@ int read_message(int conn_fd, char* buffer, unsigned int buff_size){
 }
 
 int write_message(int conn_fd, char* buffer, unsigned int buff_size){
-    int bytes_passed = 0;
+    unsigned int bytes_passed = 0;
     int current_pass = 0;
     while (bytes_passed < buff_size){
         current_pass = write(conn_fd, buffer + bytes_passed, buff_size - bytes_passed);
@@ -156,8 +156,6 @@ int process_login(int conn_fd, char* users_path, char* user_name){
 	char* line = 0;
 	size_t len = 0;
 	ssize_t read;
-	unsigned int message_length;
-	char header[MAX_CHARS_EXPECTED] = {0};
     char input_name[MAX_USER_INPUT] = {0}, input_password[MAX_USER_INPUT] = {0};
     char file_user[MAX_USER_INPUT] = {0}, file_password[MAX_USER_INPUT] = {0};
 	char* login_status = "1";
@@ -179,13 +177,16 @@ int process_login(int conn_fd, char* users_path, char* user_name){
             if (sscanf(line, "%s\t%s", file_user, file_password) != -1){
                 if (!strcmp(file_user, input_name) && !strcmp(file_password, input_password)){
                     login_status = "0";
-                    user_name = input_name;
+                    for(unsigned int i = 0; i < strlen(input_name); i++){
+			user_name[i] = input_name[i];
+		    }
                 }
             }
 	    }
         write_to_client(conn_fd, login_status); // Will tell client side if login was successfull or not
     }
     fclose(user_details);
+    return 0;
 }
 
 int print_courses(int conn_fd){
@@ -194,7 +195,7 @@ int print_courses(int conn_fd){
 
 int check_course_exists(char* input_number){
     char *file_line = NULL;
-    char *course_number;
+    char *course_number = NULL;
     size_t len = 0;
     ssize_t read;
     FILE* course_list;
@@ -243,7 +244,7 @@ int add_course(int conn_fd){
         perror("Error writing to file");
         return 1;
     }
-    if (close(course_list)){
+    if (fclose(course_list)){
         perror("Error closing file");
         return 1;
     }
@@ -266,7 +267,7 @@ int rate_course(int conn_fd, char* user_name){
     }
     char file_name[2 + MAX_COURSE_NUMBER];
     strcat(strcat(file_name, "./"), course_number);
-    if (!(course_file = fopen(file_name))){
+    if (!(course_file = fopen(file_name, "a"))){
         perror("Error opening file");
         return 1;
     }
@@ -274,7 +275,7 @@ int rate_course(int conn_fd, char* user_name){
         perror("Error writing to file");
         return 1;
     }
-    if (fclose(course_file){
+    if (fclose(course_file)){
         perror("Error closing file");
         return 1;
     }
@@ -298,14 +299,15 @@ int process_client(int conn_fd, char* users_path){
         return 1;
     }
     // user_name variable now has the currentley logged in user name
-    while (strcmp(read_from_client(conn_fd, input_cmd), "quit")){
+    while (strcmp(input_cmd, "quit")){
+	read_from_client(conn_fd, input_cmd);
         if (strcmp(input_cmd, "list_of_courses")){
             if (print_courses(conn_fd)){
                 return 1;
             }
         }
         else if (strcmp(input_cmd, "add_course")){
-            if (add_course){
+            if (add_course(conn_fd)){
                 return 1;
             }
         }
