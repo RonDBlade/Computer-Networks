@@ -127,8 +127,10 @@ int main(int argc, char *argv[]){
     char user[16],password[16];
     size_t len=0;
     int nread=0;
+    char input[1046]//setting max size for input,using the longest command,which takes 11 to name it,1024 chars for rating text,max size of course is 4,3 for rate number,1 for \0,3 spaces
     char delimiter[5]=" \t\r\n";
 	char* hostname;
+	
     struct sockaddr_in server_address;
 	struct hostent *he;
     int sockfd = -1;
@@ -182,9 +184,9 @@ int main(int argc, char *argv[]){
             printf("Invalid input,please enter username\n");
             continue;
         }
-        token=strtok(buff1,delimiter);
+        token=strtok(NULL,delimiter);
         strcpy(user,token);//assume user length is 15 or less
-        if(strtok(buff1,delimiter)!=NULL){//more than just "User:" and username
+        if(strtok(NULL,delimiter)!=NULL){//more than just "User:" and username
             printf("Invalid input,please enter username\n");
             continue;
         }
@@ -196,9 +198,9 @@ int main(int argc, char *argv[]){
             memset(user, 0 ,16);
             continue;
         }
-        token=strtok(buff1,delimiter);
+        token=strtok(NULL,delimiter);
         strcpy(password,token);//assume user length is 15 or less
-        if(strtok(buff1,delimiter)!=NULL){//more than just "Password:" and password
+        if(strtok(NULL,delimiter)!=NULL){//more than just "Password:" and password
             printf("Invalid input,please enter password\n");
             continue;
         }
@@ -206,24 +208,41 @@ int main(int argc, char *argv[]){
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;CHANGE WHAT THAT IS INSIDE IT IS OLD WHAT THE FUCK IS GOING ON
+	memset(input, 0 ,1046);
       	getline(&buff1,&len,stdin);
 	token=strtok(buff1,delimiter);
 	//now lets check what command he has entered
 	if(strcmp(token,"list_of_courses")){
+		if(strtok(NULL,delimiter)!=NULL){
+			printf("Invalid input\n");
+			continue;
+		}
+		//else send token to the server
 	}
 	else if(strcmp(token,"add_course")){
+		//append things to input[] array and send to server
 	}
 	else if(strcmp(token,"rate_course")){
+		//append things to input[] array and send to server
 	}
 	else if(strcmp(token,"get_rate")){
+		//append things to input[] array and send to server
 	}
 	else if(strcmp(token,"quit")){
+		if(strtok(NULL,delimiter)!=NULL){
+			printf("Invalid input\n");
+			continue;
+		}
+		//if we get here,then just close and clear everything,and return 0.
+		close(sockfd);
+		return 0;
 	}
 	else{
 		printf("Invalid input\n");
 		continue;
 	}
-        close(sockfd);
-        return 0;
     }
+	//this is just here to make the program compile,closing will actually happen in the "quit" command
+	close(sockfd);
+        return 0;
 }
