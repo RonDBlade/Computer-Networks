@@ -143,6 +143,12 @@ int main(int argc, char *argv[]){
     char delimiter[5]=" \t\r\n";
 	char* hostname;
 	
+	char cmd[MAX_CMD_LENGTH];
+	char course_number[MAX_COURSE_NUMBER];
+    char course_name[MAX_COURSE_NAME];
+	char rating_value[4];
+    char rating_text[MAX_RATE_TEXT];
+	
     struct sockaddr_in server_address;
 	struct hostent *he;
     int sockfd = -1;
@@ -197,7 +203,7 @@ int main(int argc, char *argv[]){
     while(1){//keep going until the user gives us good user and pass.do break; when he does.
 		getline(&buff1,&len,stdin);//getline from user.
         token=strtok(buff1,delimiter);
-        if(strcmp(token,"User:")){
+        if(!strcmp(token,"User:")){
             printf("Invalid input,please enter username\n");
             continue;
         }
@@ -210,7 +216,7 @@ int main(int argc, char *argv[]){
         //if we are here,then first line was OK
         getline(&buff1,&len,stdin);
         token=strtok(buff1,delimiter);
-        if(strcmp(token,"Password:")){
+        if(!strcmp(token,"Password:")){
             printf("Invalid input,please enter password\n");
             memset(user, 0 ,16);
             continue;
@@ -225,7 +231,7 @@ int main(int argc, char *argv[]){
 		write_to_server(sockfd, user);
 		write_to_server(sockfd, password);
 		read_from_server(sockfd, buff1);
-		if(!strcmp(buff1, "0")){// Server sends 0 on log in, and 1 other wise, so we ask for another username+password input.
+		if(!strcmp(buff1, "0")){// Server sends 0 on log in, and 1 otherwise, so we ask for another username+password input.
 			break;
 		}
 		printf("Failed to login.\n");
@@ -234,61 +240,71 @@ int main(int argc, char *argv[]){
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;
 		memset(input, 0 ,1046);
-			getline(&buff1,&len,stdin);
+		memset(cmd, 0, MAX_CMD_LENGTH);
+		getline(&buff1,&len,stdin);
 		token=strtok(buff1,delimiter);
 		//now lets check what command he has entered
-		if(strcmp(token,"list_of_courses")){
+		if(!strcmp(token,"list_of_courses")){
 			if(strtok(NULL,delimiter)!=NULL){
 				printf("Invalid input\n");
 				continue;
 			}
-			write_to_server(sockfd, "list_of_courses");
+			strcpy(cmd,token);
+			write_to_server(sockfd, cmd);
 			read_file_from_server(sockfd);
 		}
-	}
-	else if(strcmp(token,"add_course")){
-		//append things to input[] array and send to server
-		count=0;
-		strcpy(input,token);
-		count+=strlen(token);
-		input[count]=' ';
-		strtok(NULL,delimiter);
-		strcpy(input+count+1,token);
-		count+=strlen(token)+1;
-		input[count]=' ';
-		strtok(NULL,delimiter);
-		strcpy(input+count+1,token);
-		write_to_server(sockfd, input;
-		read_from_server(sockfd, buff1);
-	}
-	else if(strcmp(token,"rate_course")){
-		count=0;
-		strcpy(input,token);
-		count+=strlen(token);
-		input[count]=' ';
-		strtok(NULL,delimiter);
-		strcpy(input+count+1,token);
-		count+=strlen(token)+1;
-		input[count]=' ';
-		strtok(NULL,delimiter);
-		strcpy(input+count+1,token);
-		count+=strlen(token)+1;
-		input[count]=' ';
-		strtok(NULL,delimiter);
-		strcpy(input+count+1,token);
-		write_to_server(sockfd, input;
-		read_from_server(sockfd, buff1);
-	}
-	else if(strcmp(token,"get_rate")){
-		//append things to input[] array and send to server
-	}
-	else if(strcmp(token,"quit")){
-		if(strtok(NULL,delimiter)!=NULL){
-			printf("Invalid input\n");
-			continue;
+		else if(!strcmp(token,"add_course")){
+			memset(course_number, 0, MAX_COURSE_NUMBER);
+			memset(course_name, 0, MAX_COURSE_NAME);			
+			strcpy(cmd,token);
+			strtok(NULL,delimiter);
+			strcpy(course_number,token);
+			strtok(NULL,delimiter);
+			strcpy(course_name,token);
+			write_to_server(sockfd, cmd);
+			write_to_server(sockfd, course_number);
+			write_to_server(sockfd, course_name);
+			read_from_server(sockfd, buff1);
+			if (strcmp(input, "0")){
+				printf("%s exists in the database!\n", course_number);
+			}
+			else{
+				printf("%s added successfully.\n", course_number);
+			}
 		}
-    }
-	//this is just here to make the program compile,closing will actually happen in the "quit" command
+		else if(!strcmp(token,"rate_course")){
+			memset(course_number, 0, MAX_COURSE_NUMBER);
+			memset(rating_value, 0, 4);
+			memset(rating_text, 0, MAX_RATE_TEXT);
+			strcpy(cmd,token);
+			strtok(NULL,delimiter);
+			strcpy(course_number,token);
+			strtok(NULL,delimiter);
+			strcpy(rating_value,token);
+			strtok(NULL,delimiter);
+			strcpy(rating_text,token);
+			write_to_server(sockfd, cmd);
+			write_to_server(sockfd, course_number);
+			write_to_server(sockfd, rating_value);
+			write_to_server(sockfd, rating_text);
+		}
+		else if(!strcmp(token,"get_rate")){
+			memset(course_number, 0, MAX_COURSE_NUMBER);
+			strcpy(cmd,token);
+			strtok(NULL,delimiter);
+			strcpy(course_number,token);
+			write_to_server(sockfd, cmd);
+			write_to_server(sockfd, course_number);
+			read_file_from_server;
+			}
+		else if(!strcmp(token,"quit")){
+			if(strtok(NULL,delimiter)!=NULL){
+				printf("Invalid input\n");
+				continue;
+			}
+			break; // We exit te while loop and close the socket
+		}
+	}
 	close(sockfd);
-        return 0;
+	return 0;
 }
