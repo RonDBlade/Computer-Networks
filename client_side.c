@@ -124,23 +124,25 @@ int read_file_from_server(int conn_fd){
 	char file_line[MAX_RATE_TEXT] = {0};
 	do{
 		memset(file_line, 0, MAX_RATE_TEXT);
-		read_from_server(conn_fd, file_line);
+		if (read_from_server(conn_fd, file_line)){
+			return 1;
+		}
 		if (strcmp(file_line, "0")){
 			printf("%s\n", file_line);
 		}
 	}
 	while(strcmp(file_line, "0"));
+	return 0;
 }
 
 int main(int argc, char *argv[]){
     //starting with setting up variables depending on cmd input
 	uint16_t port;
-    char* buff1=NULL,token;
+    char *buff1=NULL, *token;
     char user[16],password[16];
     size_t len=0;
-    int nread=0;
-	int count;
     char input[1046];//setting max size for input,using the longest command,which takes 11 to name it,1024 chars for rating text,max size of course is 4,3 for rate number,1 for \0,3 spaces
+    char server_response[MAX_RATE_TEXT] = {0};
     char delimiter[5]=" \t\r\n";
 	char* hostname;
 	
@@ -159,12 +161,12 @@ int main(int argc, char *argv[]){
 		port=1337;
     }
     else if(argc==2){
-		hostname = argv[2];
+		hostname = argv[1];
         port=1337;
 }
     else if(argc==3){
-		port = (unsigned short) strtoul(argv[2], NULL, 10);//might not be exactly what we need,idk what strtoul does exactly
-		hostname = argv[2];
+		hostname = argv[1];
+		port = (unsigned short) strtoul(argv[2], NULL, 10);
     }
     else{//if over 2 cmd args
         printf("Too many command line arguments\n");
@@ -176,8 +178,6 @@ int main(int argc, char *argv[]){
         perror("Error in socket()\n");
         return 1;
     }
-    
-    //missing an argument of the IP?
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
@@ -194,9 +194,10 @@ int main(int argc, char *argv[]){
         perror("Error in connect()\n");
         return 1;
     }
-
-	read_from_server(sockfd, buff1);
-	if (strcmp(buff1, "0")){
+	if (read_from_server(sockfd, server_response)){
+		return 1;
+	}
+	if (strcmp(server_response, "0")){
 		printf("Error connecting server\n");
 	}
 	printf("Welcome! Please log in.\n");
@@ -232,8 +233,8 @@ int main(int argc, char *argv[]){
 		// If we got here, the user entered user_name and password correctley, we send them to the server for authentication
 		write_to_server(sockfd, user);
 		write_to_server(sockfd, password);
-		read_from_server(sockfd, buff1);
-		if(!strcmp(buff1, "0")){// Server sends 0 on log in, and 1 otherwise, so we ask for another username+password input.
+		read_from_server(sockfd, server_response);
+		if(!strcmp(server_response, "0")){// Server sends 0 on log in, and 1 otherwise, so we ask for another username+password input.
 			break;
 		}
 		printf("Failed to login.\n");
@@ -252,8 +253,12 @@ int main(int argc, char *argv[]){
 				continue;
 			}
 			strcpy(cmd,token);
-			write_to_server(sockfd, cmd);
-			read_file_from_server(sockfd);
+			if (write_to_server(sockfd, cmd)){
+				continue;
+			}
+			if (read_file_from_server(sockfd)){
+				continue;
+			}
 		}
 		else if(!strcmp(token,"add_course")){
 			memset(course_number, 0, MAX_COURSE_NUMBER);
@@ -267,11 +272,19 @@ int main(int argc, char *argv[]){
 				printf("Invalid input\n");
 				continue;
 			}
-			write_to_server(sockfd, cmd);
-			write_to_server(sockfd, course_number);
-			write_to_server(sockfd, course_name);
-			read_from_server(sockfd, input);
-			if (strcmp(input, "0")){
+			if (write_to_server(sockfd, cmd)){
+				continue;
+			}
+			if (write_to_server(sockfd, course_number)){
+				continue;
+			}
+			if (write_to_server(sockfd, course_name)){
+				continue;
+			}
+			if (read_from_server(sockfd, server_response)){
+				continue;
+			}
+			if (strcmp(server_response, "0")){
 				printf("%s exists in the database!\n", course_number);
 			}
 			else{
@@ -293,10 +306,18 @@ int main(int argc, char *argv[]){
 				printf("Invalid input\n");
 				continue;
 			}
-			write_to_server(sockfd, cmd);
-			write_to_server(sockfd, course_number);
-			write_to_server(sockfd, rating_value);
-			write_to_server(sockfd, rating_text);
+			if (write_to_server(sockfd, cmd)){
+				continue;
+			}
+			if (write_to_server(sockfd, course_number)){
+				continue;
+			}
+			if (write_to_server(sockfd, rating_value)){
+				continue;
+			}
+			if (write_to_server(sockfd, rating_text)){
+				continue;
+			}
 		}
 		else if(!strcmp(token,"get_rate")){
 			memset(course_number, 0, MAX_COURSE_NUMBER);
@@ -307,10 +328,16 @@ int main(int argc, char *argv[]){
 				printf("Invalid input\n");
 				continue;
 			}
-			write_to_server(sockfd, cmd);
-			write_to_server(sockfd, course_number);
-			read_file_from_server(sockfd);
+			if (write_to_server(sockfd, cmd)){
+				continue;
 			}
+			if (write_to_server(sockfd, course_number)){
+				continue;
+			}
+			if (read_file_from_server(sockfd)){
+				continue;
+			}
+		}
 		else if(!strcmp(token,"quit")){
 			if(strtok(NULL,delimiter)!=NULL){
 				printf("Invalid input\n");

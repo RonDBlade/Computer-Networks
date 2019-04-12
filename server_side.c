@@ -7,7 +7,6 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 
 /*    The program operates as a sever, that binds to the provided port and waits for a connection in any address.
@@ -164,7 +163,9 @@ int process_login(int conn_fd, char* users_path, char* user_name){
         perror("Error reading user file\n");
         return 1;
     }
-    write_to_client(conn_fd, "0");
+    if (write_to_client(conn_fd, "0")){
+	return 1;
+	}
 	while (strcmp(login_status, "0")){
         rewind(user_details);
         if (read_from_client(conn_fd, input_name)){
@@ -331,7 +332,7 @@ int main(int argc, char *argv[]){
     assert(argc >= 3);
     uint16_t port;
     if (argc > 3){
-    	port = (unsigned short) strtoul(argv[1], NULL, 10);
+    	port = (unsigned short) strtoul(argv[3], NULL, 10);
     }
     else{
     	port = 1337;
@@ -339,7 +340,6 @@ int main(int argc, char *argv[]){
 
     int listen_fd = -1;
     int conn_fd = -1;
-    int flags;
 
     struct sockaddr_in server_address;
     struct sockaddr_in peer_address;
@@ -351,19 +351,6 @@ int main(int argc, char *argv[]){
         return 1;
     }
     memset(&server_address, 0, sizeof(server_address));
-
-    //Set listener socket to be non-blocking
-    if ((flags = fcntl(listen_fd, F_GETFL)) < 0){
-        perror("Error getting socket flags\n");
-        return 1;
-    }
-
-    if ((fcntl(listen_fd, F_SETFL, flags | O_NONBLOCK)) < 0){
-        perror("Error setting socket as non-blocking\n");
-        return 1;
-    }
-
-
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
     server_address.sin_port = htons(port);
@@ -384,17 +371,16 @@ int main(int argc, char *argv[]){
         return 1;
     }
     while (listen_fd != -1){
+	printf("Ready to accept\n");
         conn_fd = accept(listen_fd, (struct sockaddr*) &peer_address, &address_size);
         if (conn_fd < 0){
-            if ((errno != EWOULDBLOCK) && (errno != EAGAIN)){
-                perror("Error connecting client\n");
-            }
+            perror("Error connecting client\n");
         }
         else{
             if (process_client(conn_fd, argv[1])){
                 fprintf(stderr, "Error processing client\n");
             }
-			close(conn_fd);
+	close(conn_fd);
         }
     }
     close(listen_fd);
