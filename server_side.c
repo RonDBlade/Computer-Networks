@@ -121,10 +121,11 @@ int print_file_to_client(int conn_fd, char* file_name){
     ssize_t read;
     FILE* output_file;
     if (!(output_file = fopen(file_name, "r"))){
-        // Sending 0 to client will indicate end of file
-        if (write_to_client(conn_fd, "0")){
+        // Sending -1 to client will indicate no file exists
+        if (write_to_client(conn_fd, "-1")){
             return 1;
         }
+	return 0;
     }
     while ((read = getline(&file_line, &len, output_file)) != -1){
         if (write_to_client(conn_fd, file_line)){
@@ -139,6 +140,7 @@ int print_file_to_client(int conn_fd, char* file_name){
         fclose(output_file);
         return 1;
     }
+    // Sending 0 to client will indicate end of file
     if (write_to_client(conn_fd, "0")){
         free(file_line);
         fclose(output_file);
@@ -196,7 +198,7 @@ int print_courses(int conn_fd){
 
 int check_course_exists(char* input_number){
     char *file_line = NULL;
-    char *course_number = NULL;
+    char course_number[MAX_COURSE_NUMBER] = {0};
     size_t len = 0;
     ssize_t read;
     FILE* course_list;
@@ -205,7 +207,7 @@ int check_course_exists(char* input_number){
         return 0;
     }
     while ((read = getline(&file_line, &len, course_list)) != -1){
-        if (sscanf(file_line, "%s", course_number) != -1){
+        if (sscanf(file_line, "%[^:]", course_number) != -1){ // Regex that stops at the first : from the beggining of the line
             if (!strcmp(input_number, course_number)){ // Found course
                 free(file_line);
                 fclose(course_list);
@@ -249,7 +251,7 @@ int add_course(int conn_fd){
         perror("Error closing file");
         return 1;
     }
-    return 0;
+    return write_to_client(conn_fd, "0");
 }
 
 int rate_course(int conn_fd, char* user_name){
@@ -266,6 +268,9 @@ int rate_course(int conn_fd, char* user_name){
     if (read_from_client(conn_fd, rating_text)){
         return 1;
     }
+    if (check_course_exists(course_number) != 1){
+        return write_to_client(conn_fd, "1"); // Client will print that course_number doesn't exists in database
+    }
     char file_name[2 + MAX_COURSE_NUMBER];
     strcat(strcat(file_name, "./"), course_number);
     if (!(course_file = fopen(file_name, "a"))){
@@ -280,12 +285,12 @@ int rate_course(int conn_fd, char* user_name){
         perror("Error closing file");
         return 1;
     }
-    return 0;
+    return write_to_client(conn_fd, "0");
 }
 
 int get_rate(int conn_fd){
-    char course_number[MAX_COURSE_NUMBER];
-    char file_name[2 + MAX_COURSE_NUMBER];
+    char course_number[MAX_COURSE_NUMBER] = {0};
+    char file_name[2 + MAX_COURSE_NUMBER] = {0};
     if (read_from_client(conn_fd, course_number)){
         return 1;
     }
@@ -300,28 +305,31 @@ int process_client(int conn_fd, char* users_path){
         return 1;
     }
     // user_name variable now has the currentley logged in user name
-    while (strcmp(input_cmd, "quit")){
+    while (1){
 	read_from_client(conn_fd, input_cmd);
-        if (strcmp(input_cmd, "list_of_courses")){
+        if (!strcmp(input_cmd, "list_of_courses")){
             if (print_courses(conn_fd)){
                 return 1;
             }
         }
-        else if (strcmp(input_cmd, "add_course")){
+        else if (!strcmp(input_cmd, "add_course")){
             if (add_course(conn_fd)){
                 return 1;
             }
         }
-        else if (strcmp(input_cmd, "rate_course")){
+        else if (!strcmp(input_cmd, "rate_course")){
             if (rate_course(conn_fd, user_name)){
                 return 1;
             }
         }
-        else if (strcmp(input_cmd, "get_rate")){
+        else if (!strcmp(input_cmd, "get_rate")){
             if (get_rate(conn_fd)){
                 return 1;
             }
         }
+	else if(!strcmp(input_cmd, "quit")){
+		break;
+	}
         // If none of them is true, the command is illegal and client shouldn't send it
     }
     // Connection will be closed in main (where it was opened), any dynamic allocations should be freed here
@@ -371,7 +379,6 @@ int main(int argc, char *argv[]){
         return 1;
     }
     while (listen_fd != -1){
-	printf("Ready to accept\n");
         conn_fd = accept(listen_fd, (struct sockaddr*) &peer_address, &address_size);
         if (conn_fd < 0){
             perror("Error connecting client\n");
@@ -380,7 +387,7 @@ int main(int argc, char *argv[]){
             if (process_client(conn_fd, argv[1])){
                 fprintf(stderr, "Error processing client\n");
             }
-	close(conn_fd);
+	    close(conn_fd);
         }
     }
     close(listen_fd);
