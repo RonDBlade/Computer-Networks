@@ -9,16 +9,6 @@
 #include <unistd.h>
 
 
-/*    The program operates as a sever, that binds to the provided port and waits for a connection in any address.
-    When a connection has been made, the server reads a header of the amount of data the client is about to send,
-    and start reading it. When the amount of data is transferred to the server, it calculates the amount of printable
-    character it received in the stream, updates a global counter for all the printable characters it saw in all clients,
-    and sends the client the amount of printable character it saw in the stream of data. Then, it continues to the next
-    client in a serial order (please pay attention for the explanation above if it wasn't supposed to be implemented serialy).
-    To stop the server operation, an interrupt signal should be sent, and the server will stop receiving new clients,
-    finish handling the accepted clients, and print the counter of each printable character it saw while running, and shut down.
-*/
-
 #define MAX_CHARS_EXPECTED 11 // Used to transfer how many characters to read in header. An unsigned int can have at most 10 bytes + '\0' in string representation (10 digits)
 #define MAX_CONNECTIONS 25
 #define MAX_USER_INPUT 16

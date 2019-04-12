@@ -12,19 +12,6 @@
 #include <unistd.h>
 #include <netdb.h>
 
-/* 
-    The program connects to the provided server with the provided port, and generates
-    the provided amount of random characters from /dev/urandom. Afterwards, a header indicating the
-    amount of characters it's going to send to the server is sent, and the characters are being
-    transmitted to the server using TCP connection. At the end of the transmission, the program
-    recives the amount of printable characters that were in the stream of characters it sent to the server,
-    and it prints the total number it recived.
-
-    For printing user details:
-        strcat(strcat(strcat(login_message, "Hi "), user_name), ", good to see you.\n");
-        strcat(login_message, "Failed to login.\n");
-
-*/
 
 #define MAX_CHARS_EXPECTED 11 // Used to transfer how many characters to read in header. An unsigned int can have at most 10 bytes + '\0' in string representation (10 digits)
 #define MAX_CONNECTIONS 25
