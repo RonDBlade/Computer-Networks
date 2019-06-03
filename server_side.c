@@ -93,7 +93,7 @@ int read_from_client(int conn_fd, char* buffer){
 int write_to_client(int conn_fd, char* buffer){
     unsigned int message_length = strlen(buffer);
     char header[MAX_CHARS_EXPECTED] = {0};
-    sprintf(header, "%011u", message_length);
+    sprintf(header, "%010u", message_length);
     if (write_header(conn_fd, header)){
         perror("Error writing header to client\n");
         return 1;
@@ -178,21 +178,22 @@ int process_login(int conn_fd, char* users_path, char* user_name){
 	    }
         write_to_client(conn_fd, login_status); // Will tell client side if login was successfull or not
     }
+    free(line);
     fclose(user_details);
     return 0;
 }
 
-int print_courses(int conn_fd){
-    return print_file_to_client(conn_fd, "./course_list");
+int print_courses(int conn_fd, char* course_list_path){
+    return print_file_to_client(conn_fd, course_list_path);
 }
 
-int check_course_exists(char* input_number){
+int check_course_exists(char* input_number, char* course_list_path){
     char *file_line = NULL;
     char course_number[MAX_COURSE_NUMBER] = {0};
     size_t len = 0;
     ssize_t read;
     FILE* course_list;
-    if (!(course_list = fopen("./course_list", "r"))){
+    if (!(course_list = fopen(course_list_path, "r"))){
         // Course file hasn't been made - no course exists
         return 0;
     }
@@ -216,7 +217,7 @@ int check_course_exists(char* input_number){
     return 0;
 }
 
-int add_course(int conn_fd){
+int add_course(int conn_fd, char *course_list_path){
     char course_number[MAX_COURSE_NUMBER];
     char course_name[MAX_COURSE_NAME];
     FILE* course_list;
@@ -226,10 +227,10 @@ int add_course(int conn_fd){
     if (read_from_client(conn_fd, course_name)){
         return 1;
     }
-    if (check_course_exists(course_number) == 1){
+    if (check_course_exists(course_number, course_list_path) == 1){
         return write_to_client(conn_fd, "1"); // Client will print that course_number exists
     }
-    if (!(course_list = fopen("./course_list", "a"))){
+    if (!(course_list = fopen(course_list_path, "a"))){
         perror("Error opening file");
         return 1;
     }
@@ -244,11 +245,12 @@ int add_course(int conn_fd){
     return write_to_client(conn_fd, "0");
 }
 
-int rate_course(int conn_fd, char* user_name){
+int rate_course(int conn_fd, char* user_name, char* working_directory, char* course_list_path){
     char course_number[MAX_COURSE_NUMBER] = {0};
     char rating_value[4] = {0};
     char rating_text[MAX_RATE_TEXT] = {0};
-    char file_name[2 + MAX_COURSE_NUMBER] = {0};
+    char file_name[2 + MAX_COURSE_NUMBER + strlen(working_directory)];
+    memset(file_name, 0, 2 + MAX_COURSE_NUMBER + strlen(working_directory));
     FILE* course_file;
     if (read_from_client(conn_fd, course_number)){
         return 1;
@@ -259,10 +261,10 @@ int rate_course(int conn_fd, char* user_name){
     if (read_from_client(conn_fd, rating_text)){
         return 1;
     }
-    if (check_course_exists(course_number) != 1){
+    if (check_course_exists(course_number, course_list_path) != 1){
         return write_to_client(conn_fd, "1"); // Client will print that course_number doesn't exists in database
     }
-    strcat(strcat(file_name, "./"), course_number);
+    strcat(strcat(file_name, working_directory), course_number);
     if (!(course_file = fopen(file_name, "a"))){
         perror("Error opening file");
         return 1;
@@ -278,56 +280,60 @@ int rate_course(int conn_fd, char* user_name){
     return write_to_client(conn_fd, "0");
 }
 
-int get_rate(int conn_fd){
+int get_rate(int conn_fd, char* working_directory, char* course_list_path){
     char course_number[MAX_COURSE_NUMBER] = {0};
-    char file_name[2 + MAX_COURSE_NUMBER] = {0};
+    char file_name[2 + MAX_COURSE_NUMBER + strlen(working_directory)];
+    memset(file_name, 0, 2 + MAX_COURSE_NUMBER + strlen(working_directory));
     if (read_from_client(conn_fd, course_number)){
         return 1;
     }
-    if (check_course_exists(course_number) != 1){
+    if (check_course_exists(course_number, course_list_path) != 1){
         return write_to_client(conn_fd, "1"); // Client will print that course_number doesn't exists in database
     }
     if (write_to_client(conn_fd, "0")){
 	return 1;
     }
-    strcat(strcat(file_name, "./"), course_number);
+    strcat(strcat(file_name, working_directory), course_number);
     return print_file_to_client(conn_fd, file_name);
 }
 
-int process_client(int conn_fd, char* users_path){
+int process_client(int conn_fd, char* users_path, char* working_directory){
     char user_name[MAX_USER_INPUT] = {0};
     char input_cmd[MAX_CMD_LENGTH] = {0};
+    char course_list_path[strlen(working_directory) + 2 + 11];
+    memset(course_list_path, 0, strlen(working_directory) + 2 + 11);
+    strcat(strcat(course_list_path, working_directory), "course_list");
     if (process_login(conn_fd, users_path, user_name)){
         return 1;
     }
     // user_name variable now has the currentley logged in user name
-    while (1){
 	read_from_client(conn_fd, input_cmd);
         if (!strcmp(input_cmd, "list_of_courses")){
-            if (print_courses(conn_fd)){
+            if (print_courses(conn_fd, course_list_path)){
                 return 1;
             }
         }
         else if (!strcmp(input_cmd, "add_course")){
-            if (add_course(conn_fd)){
+            if (add_course(conn_fd, course_list_path)){
                 return 1;
             }
         }
         else if (!strcmp(input_cmd, "rate_course")){
-            if (rate_course(conn_fd, user_name)){
+            if (rate_course(conn_fd, user_name, working_directory, course_list_path)){
                 return 1;
             }
         }
         else if (!strcmp(input_cmd, "get_rate")){
-            if (get_rate(conn_fd)){
+            if (get_rate(conn_fd, working_directory, course_list_path)){
                 return 1;
             }
         }
+        //TODO: Add broadcast options which will go through user list with
+        // user names, and send them a message
 	else if(!strcmp(input_cmd, "quit")){
 		break;
 	}
-        // If none of them is true, the command is illegal and client shouldn't send it
-    }
+    // If none of them is true, the command is illegal and client shouldn't send it
     // Connection will be closed in main (where it was opened), any dynamic allocations should be freed here
     return 0;
 }
@@ -341,9 +347,19 @@ int main(int argc, char *argv[]){
     else{
     	port = 1337;
     }
+    char working_directory[strlen(argv[2]) + 2];
 
     int listen_fd = -1;
     int conn_fd = -1;
+
+    int client_socket[MAX_CONNECTIONS] = {0};
+    char user_names[MAX_CONNECTIONS][MAX_USER_INPUT];
+    char user_name[MAX_USER_INPUT] = {0};
+    memset(user_names, 0, MAX_CONNECTIONS * MAX_USER_INPUT * sizeof(user_names[0][0]));
+    int i;
+    int max_fd;
+    int current_sd;
+    fd_set read_fds;
 
     struct sockaddr_in server_address;
     struct sockaddr_in peer_address;
@@ -369,21 +385,59 @@ int main(int argc, char *argv[]){
         close(listen_fd);
         return 1;
     }
-    if (chdir(argv[2])){ // Change current working directory to provided path to handle files as local
-        perror("Error using given directory to server\n");
-        close(listen_fd);
-        return 1;
+    memset(working_directory, 0, strlen(argv[2]) + 2);
+    if (argv[2][strlen(argv[2]-1)] == '/'){
+        strcpy(working_directory, argv[2]);
+    }
+    else{
+        strcat(strcat(working_directory, argv[2]), "/");
     }
     while (listen_fd != -1){
-        conn_fd = accept(listen_fd, (struct sockaddr*) &peer_address, &address_size);
-        if (conn_fd < 0){
-            perror("Error connecting client\n");
+        FD_ZERO(&read_fds);
+        FD_SET(listen_fd, &read_fds);
+        max_fd = listen_fd;
+        for (i = 0; i < MAX_CONNECTIONS; i++){
+            current_sd = client_socket[i];
+            if (current_sd > 0){
+                FD_SET(current_sd, &read_fds);
+            }
+            if (current_sd > max_fd){
+                max_fd = current_sd;
+            }
+        }
+        if(select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0){
+            perror("Error while using select");
+        }
+        if(FD_ISSET(listen_fd, &read_fds)){
+            conn_fd = accept(listen_fd, (struct sockaddr*) &peer_address, &address_size);
+            if (conn_fd < 0){
+                perror("Error connecting client\n");
+                continue;
+            }
+            for (i = 0; i < MAX_CONNECTIONS; i++){
+                if (client_socket[i] == 0){
+                    client_socket[i] = conn_fd;
+                    break;
+                }
+            }
         }
         else{
-            if (process_client(conn_fd, argv[1])){
-                fprintf(stderr, "Error processing client\n");
+            for (i = 0; i < MAX_CONNECTIONS; i++){
+                current_sd = client_socket[i];
+                if (FD_ISSET(current_sd, &read_fds)){
+                    if (user_names[i] == 0){
+                        //Send to login
+                    }
+                    else{
+                        // Process request like process client, make sure to remove from user list and client socket if user quits
+                        /*
+                        if (process_client(conn_fd, argv[1], working_directory)){
+                            fprintf(stderr, "Error processing client\n");
+                        }
+                        */
+                    }
+                }
             }
-	    close(conn_fd);
         }
     }
     close(listen_fd);
