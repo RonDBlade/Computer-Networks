@@ -16,6 +16,7 @@
 #define MAX_COURSE_NAME 100
 #define MAX_RATE_TEXT 1024
 #define MAX_CMD_LENGTH 16
+#define MAX_BROADCAST_MESSAGE 200
 
 
 //-----Header Read/Write-----
@@ -115,7 +116,7 @@ int print_file_to_client(int conn_fd, char* file_name){
         if (write_to_client(conn_fd, "-1")){
             return 1;
         }
-	return 0;
+	    return 0;
     }
     while ((read = getline(&file_line, &len, output_file)) != -1){
         if (write_to_client(conn_fd, file_line)){
@@ -155,29 +156,23 @@ int process_login(int conn_fd, char* users_path, char* user_name){
         perror("Error reading user file\n");
         return 1;
     }
-    if (write_to_client(conn_fd, "0")){
-	return 1;
-	}
-	while (strcmp(login_status, "0")){
-        rewind(user_details);
-        if (read_from_client(conn_fd, input_name)){
-            return 1;
-        }
-        if (read_from_client(conn_fd, input_password)){
-            return 1;
-        }
-        while((read = getline(&line, &len, user_details)) != -1){
-            if (sscanf(line, "%s\t%s", file_user, file_password) != -1){
-                if (!strcmp(file_user, input_name) && !strcmp(file_password, input_password)){
-                    login_status = "0";
-                    for(unsigned int i = 0; i < strlen(input_name); i++){
-			user_name[i] = input_name[i];
-		    }
+    if (read_from_client(conn_fd, input_name)){
+        return 1;
+    }
+    if (read_from_client(conn_fd, input_password)){
+        return 1;
+    }
+    while((read = getline(&line, &len, user_details)) != -1){
+        if (sscanf(line, "%s\t%s", file_user, file_password) != -1){
+            if (!strcmp(file_user, input_name) && !strcmp(file_password, input_password)){
+                login_status = "0";
+                for(unsigned int i = 0; i < strlen(input_name); i++){
+                    user_name[i] = input_name[i];
                 }
             }
-	    }
-        write_to_client(conn_fd, login_status); // Will tell client side if login was successfull or not
+        }
     }
+    write_to_client(conn_fd, login_status); // Will tell client side if login was successfull or not
     free(line);
     fclose(user_details);
     return 0;
@@ -217,9 +212,11 @@ int check_course_exists(char* input_number, char* course_list_path){
     return 0;
 }
 
-int add_course(int conn_fd, char *course_list_path){
+int add_course(int conn_fd, char *course_list_path, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int *socket_list, int client_index){
     char course_number[MAX_COURSE_NUMBER];
     char course_name[MAX_COURSE_NAME];
+    char *user_name = user_list[client_index];
+    int i;
     FILE* course_list;
     if (read_from_client(conn_fd, course_number)){
         return 1;
@@ -242,7 +239,15 @@ int add_course(int conn_fd, char *course_list_path){
         perror("Error closing file");
         return 1;
     }
-    return write_to_client(conn_fd, "0");
+    if (write_to_client(conn_fd, "0")){
+        return 1;
+    }
+    for (i = 0; i < MAX_CONNECTIONS; i++){
+        if ((user_list[i] != 0) && (strcmp(user_list[i], user_name))){
+            write_to_client(socket_list[i], "2");
+        }
+    }
+    return 0;
 }
 
 int rate_course(int conn_fd, char* user_name, char* working_directory, char* course_list_path){
@@ -297,44 +302,59 @@ int get_rate(int conn_fd, char* working_directory, char* course_list_path){
     return print_file_to_client(conn_fd, file_name);
 }
 
-int process_client(int conn_fd, char* users_path, char* working_directory){
-    char user_name[MAX_USER_INPUT] = {0};
-    char input_cmd[MAX_CMD_LENGTH] = {0};
-    char course_list_path[strlen(working_directory) + 2 + 11];
-    memset(course_list_path, 0, strlen(working_directory) + 2 + 11);
-    strcat(strcat(course_list_path, working_directory), "course_list");
-    if (process_login(conn_fd, users_path, user_name)){
+int broadcast_message(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int* socket_list, int client_index){
+    int i;
+    char *user_name = user_list[client_index];
+    char message[MAX_BROADCAST_MESSAGE] = {0};
+    if(read_from_client(conn_fd, message)){
         return 1;
     }
+    for(i = 0; i < MAX_CONNECTIONS; i++){
+        if ((user_list[i] != 0) && (strcmp(user_list[i], user_name))){
+            write_to_client(socket_list[i], "1");
+            write_to_client(socket_list[i], user_list[i]);
+            write_to_client(socket_list[i], message);
+        }
+    }
+    return 0;
+}
+
+int process_client(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int* socket_list, int client_index, char* course_list_path, char* working_directory){
+    char *user_name = user_list[client_index];
+    char input_cmd[MAX_CMD_LENGTH] = {0};
     // user_name variable now has the currentley logged in user name
 	read_from_client(conn_fd, input_cmd);
-        if (!strcmp(input_cmd, "list_of_courses")){
-            if (print_courses(conn_fd, course_list_path)){
-                return 1;
-            }
+    if (!strcmp(input_cmd, "list_of_courses")){
+        if (print_courses(conn_fd, course_list_path)){
+            return 1;
         }
-        else if (!strcmp(input_cmd, "add_course")){
-            if (add_course(conn_fd, course_list_path)){
-                return 1;
-            }
+    }
+    else if (!strcmp(input_cmd, "add_course")){
+        if (add_course(conn_fd, course_list_path, user_list, socket_list, client_index)){
+            return 1;
         }
-        else if (!strcmp(input_cmd, "rate_course")){
-            if (rate_course(conn_fd, user_name, working_directory, course_list_path)){
-                return 1;
-            }
+    }
+    else if (!strcmp(input_cmd, "rate_course")){
+        if (rate_course(conn_fd, user_name, working_directory, course_list_path)){
+            return 1;
         }
-        else if (!strcmp(input_cmd, "get_rate")){
-            if (get_rate(conn_fd, working_directory, course_list_path)){
-                return 1;
-            }
+    }
+    else if (!strcmp(input_cmd, "get_rate")){
+        if (get_rate(conn_fd, working_directory, course_list_path)){
+            return 1;
         }
-        //TODO: Add broadcast options which will go through user list with
-        // user names, and send them a message
+    }
+    else if (!strcmp(input_cmd, "broadcast")){
+        if (broadcast_message(conn_fd, user_list, socket_list, client_index)){
+            return 1;
+        }
+    }
 	else if(!strcmp(input_cmd, "quit")){
-		break;
+        close(conn_fd);
+        socket_list[client_index] = 0;
+        memset(user_list[client_index], 0, strlen(user_list[client_index]));
 	}
     // If none of them is true, the command is illegal and client shouldn't send it
-    // Connection will be closed in main (where it was opened), any dynamic allocations should be freed here
     return 0;
 }
 
@@ -354,7 +374,6 @@ int main(int argc, char *argv[]){
 
     int client_socket[MAX_CONNECTIONS] = {0};
     char user_names[MAX_CONNECTIONS][MAX_USER_INPUT];
-    char user_name[MAX_USER_INPUT] = {0};
     memset(user_names, 0, MAX_CONNECTIONS * MAX_USER_INPUT * sizeof(user_names[0][0]));
     int i;
     int max_fd;
@@ -392,6 +411,9 @@ int main(int argc, char *argv[]){
     else{
         strcat(strcat(working_directory, argv[2]), "/");
     }
+    char course_list_path[strlen(working_directory) + 2 + 11];
+    memset(course_list_path, 0, strlen(working_directory) + 2 + 11);
+    strcat(strcat(course_list_path, working_directory), "course_list");
     while (listen_fd != -1){
         FD_ZERO(&read_fds);
         FD_SET(listen_fd, &read_fds);
@@ -405,9 +427,11 @@ int main(int argc, char *argv[]){
                 max_fd = current_sd;
             }
         }
+        printf("Trying to select\n");
         if(select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0){
             perror("Error while using select");
         }
+        printf("Select succeed\n");
         if(FD_ISSET(listen_fd, &read_fds)){
             conn_fd = accept(listen_fd, (struct sockaddr*) &peer_address, &address_size);
             if (conn_fd < 0){
@@ -417,6 +441,10 @@ int main(int argc, char *argv[]){
             for (i = 0; i < MAX_CONNECTIONS; i++){
                 if (client_socket[i] == 0){
                     client_socket[i] = conn_fd;
+                    // Notify client he has connected
+                    if (write_to_client(conn_fd, "0")){
+                        client_socket[i] = 0;
+                    }
                     break;
                 }
             }
@@ -426,15 +454,18 @@ int main(int argc, char *argv[]){
                 current_sd = client_socket[i];
                 if (FD_ISSET(current_sd, &read_fds)){
                     if (user_names[i] == 0){
-                        //Send to login
+                        if(process_login(current_sd, argv[1], user_names[i])){
+                            // Error processing client
+                            close(current_sd);
+                            client_socket[i] = 0;
+                        }
                     }
                     else{
-                        // Process request like process client, make sure to remove from user list and client socket if user quits
-                        /*
-                        if (process_client(conn_fd, argv[1], working_directory)){
-                            fprintf(stderr, "Error processing client\n");
+                        if (process_client(current_sd, user_names, client_socket, i, course_list_path, working_directory)){
+                            close(current_sd);
+                            client_socket[i] = 0;
+                            memset(user_names[i], 0, strlen(user_names[i]));
                         }
-                        */
                     }
                 }
             }

@@ -21,7 +21,7 @@
 #define MAX_COURSE_NAME 100
 #define MAX_RATE_TEXT 1024
 #define MAX_CMD_LENGTH 16
-#define MAX_BROADCAST_LENGTH 217 // Broadcast message (200) + Max User name (16) + space
+#define MAX_BROADCAST_LENGTH 200
 
 //-----Header Read/Write-----
 
@@ -128,11 +128,15 @@ int read_file_from_server(int conn_fd){
 }
 
 int read_broadcast_from_server(int conn_fd){
-	char broadcast_message[MAX_BROADCAST_LENGTH + 1] = {0};
+	char user_name[MAX_USER_INPUT] = {0};
+	char broadcast_message[MAX_BROADCAST_LENGTH] = {0};
+	if(read_from_server(conn_fd, user_name)){
+		return 1;
+	}
 	if(read_from_server(conn_fd, broadcast_message)){
 		return 1;
 	}
-	printf("%s\n", broadcast_message);
+	printf("%s has sent a new message: %s\n", user_name, broadcast_message);
 	return 0;
 }
 
@@ -158,7 +162,6 @@ int main(int argc, char *argv[]){
     int sockfd = -1;
 	
 	fd_set reads_fds;
-	struct timeval tv;
 	int ready_to_read;
 
     if(argc==1){
@@ -168,7 +171,7 @@ int main(int argc, char *argv[]){
     else if(argc==2){
 		hostname = argv[1];
         port=1337;
-}
+	}
     else if(argc==3){
 		hostname = argv[1];
 		port = (unsigned short) strtoul(argv[2], NULL, 10);
@@ -260,10 +263,23 @@ int main(int argc, char *argv[]){
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;
-		ready_to_read = select(sockfd + 1, reads_fds, NULL, NULL, NULL);
+		ready_to_read = select(sockfd + 1, &reads_fds, NULL, NULL, NULL);
+		if (ready_to_read< 0){
+			perror("Error doing select\n");
+			close(sockfd);
+			return 1;
+		}
 		if (FD_ISSET(sockfd, &reads_fds)){
-			if (read_broadcast_from_server(sockfd)){
-				return 1;
+			if (read_from_server(sockfd, server_response)){
+				continue;
+			}
+			if (!strcmp(server_response, "1")){
+				if (read_broadcast_from_server(sockfd)){
+					continue;
+				}
+			}
+			else if (!strcmp(server_response, "2")){
+				printf("A new course was just added!");
 			}
 		}
 		if (FD_ISSET(0, &reads_fds)){
