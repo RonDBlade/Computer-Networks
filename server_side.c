@@ -26,8 +26,12 @@ int read_header(int conn_fd, char *header){
     int current_pass = 0;
     while (bytes_passed < MAX_CHARS_EXPECTED){
         current_pass = read(conn_fd, header + bytes_passed, MAX_CHARS_EXPECTED - bytes_passed);
-        if (current_pass <= 0)
+        if (current_pass <= 0){
+            if (current_pass == 0){
+                close(conn_fd);
+            }
             return 1;
+        }
         bytes_passed += current_pass;
     }
     header[bytes_passed] = '\0';
@@ -40,8 +44,12 @@ int write_header(int conn_fd, char* header){
     int current_pass = 0;
     while (bytes_passed < MAX_CHARS_EXPECTED){
         current_pass = write(conn_fd, header + bytes_passed, MAX_CHARS_EXPECTED - bytes_passed);
-        if (current_pass < 0)
+        if (current_pass < 0){
+            if (current_pass == 0){
+                close(conn_fd);
+            }
             return 1;
+        }
         bytes_passed += current_pass;
     }
     return 0;
@@ -94,7 +102,7 @@ int read_from_client(int conn_fd, char* buffer){
 int write_to_client(int conn_fd, char* buffer){
     unsigned int message_length = strlen(buffer);
     char header[MAX_CHARS_EXPECTED] = {0};
-    sprintf(header, "%010u", message_length);
+    snprintf(header, MAX_CHARS_EXPECTED, "%010u", message_length);
     if (write_header(conn_fd, header)){
         perror("Error writing header to client\n");
         return 1;
@@ -144,7 +152,7 @@ int print_file_to_client(int conn_fd, char* file_name){
 
 //-----Client Handling-----
 
-int process_login(int conn_fd, char* users_path, char* user_name){
+int process_login(int conn_fd, char* users_path, char* user_name, int* user_logged_in){
 	char* line = 0;
 	size_t len = 0;
 	ssize_t read;
@@ -166,6 +174,7 @@ int process_login(int conn_fd, char* users_path, char* user_name){
         if (sscanf(line, "%s\t%s", file_user, file_password) != -1){
             if (!strcmp(file_user, input_name) && !strcmp(file_password, input_password)){
                 login_status = "0";
+                *user_logged_in = 1;
                 for(unsigned int i = 0; i < strlen(input_name); i++){
                     user_name[i] = input_name[i];
                 }
@@ -212,7 +221,7 @@ int check_course_exists(char* input_number, char* course_list_path){
     return 0;
 }
 
-int add_course(int conn_fd, char *course_list_path, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int *socket_list, int client_index){
+int add_course(int conn_fd, char *course_list_path, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int* users_logged_in, int *socket_list, int client_index){
     char course_number[MAX_COURSE_NUMBER];
     char course_name[MAX_COURSE_NAME];
     char *user_name = user_list[client_index];
@@ -243,7 +252,7 @@ int add_course(int conn_fd, char *course_list_path, char user_list[MAX_CONNECTIO
         return 1;
     }
     for (i = 0; i < MAX_CONNECTIONS; i++){
-        if ((user_list[i] != 0) && (strcmp(user_list[i], user_name))){
+        if ((users_logged_in[i] != 0) && (strcmp(user_list[i], user_name))){
             write_to_client(socket_list[i], "2");
         }
     }
@@ -302,24 +311,27 @@ int get_rate(int conn_fd, char* working_directory, char* course_list_path){
     return print_file_to_client(conn_fd, file_name);
 }
 
-int broadcast_message(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int* socket_list, int client_index){
+int broadcast_message(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int* users_logged_in, int* socket_list, int client_index){
     int i;
     char *user_name = user_list[client_index];
     char message[MAX_BROADCAST_MESSAGE] = {0};
     if(read_from_client(conn_fd, message)){
         return 1;
     }
+    printf("Broadcasting message: %s\n", message);
     for(i = 0; i < MAX_CONNECTIONS; i++){
-        if ((user_list[i] != 0) && (strcmp(user_list[i], user_name))){
+        printf("Going through user %d\n", i);
+        if ((users_logged_in[i] != 0) && (strcmp(user_list[i], user_name))){
+            printf("Sending user %d\n", i);
             write_to_client(socket_list[i], "1");
-            write_to_client(socket_list[i], user_list[i]);
+            write_to_client(socket_list[i], user_name);
             write_to_client(socket_list[i], message);
         }
     }
     return 0;
 }
 
-int process_client(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int* socket_list, int client_index, char* course_list_path, char* working_directory){
+int process_client(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT], int* users_logged_in, int* socket_list, int client_index, char* course_list_path, char* working_directory){
     char *user_name = user_list[client_index];
     char input_cmd[MAX_CMD_LENGTH] = {0};
     // user_name variable now has the currentley logged in user name
@@ -330,7 +342,7 @@ int process_client(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT],
         }
     }
     else if (!strcmp(input_cmd, "add_course")){
-        if (add_course(conn_fd, course_list_path, user_list, socket_list, client_index)){
+        if (add_course(conn_fd, course_list_path, user_list, users_logged_in, socket_list, client_index)){
             return 1;
         }
     }
@@ -345,13 +357,14 @@ int process_client(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT],
         }
     }
     else if (!strcmp(input_cmd, "broadcast")){
-        if (broadcast_message(conn_fd, user_list, socket_list, client_index)){
+        if (broadcast_message(conn_fd, user_list, users_logged_in, socket_list, client_index)){
             return 1;
         }
     }
 	else if(!strcmp(input_cmd, "quit")){
         close(conn_fd);
         socket_list[client_index] = 0;
+        users_logged_in[client_index] = 0;
         memset(user_list[client_index], 0, strlen(user_list[client_index]));
 	}
     // If none of them is true, the command is illegal and client shouldn't send it
@@ -374,6 +387,7 @@ int main(int argc, char *argv[]){
 
     int client_socket[MAX_CONNECTIONS] = {0};
     char user_names[MAX_CONNECTIONS][MAX_USER_INPUT];
+    int users_logged_in[MAX_CONNECTIONS] = {0};
     memset(user_names, 0, MAX_CONNECTIONS * MAX_USER_INPUT * sizeof(user_names[0][0]));
     int i;
     int max_fd;
@@ -421,13 +435,15 @@ int main(int argc, char *argv[]){
         for (i = 0; i < MAX_CONNECTIONS; i++){
             current_sd = client_socket[i];
             if (current_sd > 0){
+                printf("Registered socket number %d\n", i);
                 FD_SET(current_sd, &read_fds);
             }
             if (current_sd > max_fd){
+                printf("Changing %d to %d\n", max_fd, current_sd);
                 max_fd = current_sd;
             }
         }
-        printf("Trying to select\n");
+        printf("Trying to select, max = %d\n", max_fd);
         if(select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0){
             perror("Error while using select");
         }
@@ -453,17 +469,21 @@ int main(int argc, char *argv[]){
             for (i = 0; i < MAX_CONNECTIONS; i++){
                 current_sd = client_socket[i];
                 if (FD_ISSET(current_sd, &read_fds)){
-                    if (user_names[i] == 0){
-                        if(process_login(current_sd, argv[1], user_names[i])){
+                    printf("Reading from socket number %d\n", i);
+                    if (users_logged_in[i] == 0){
+                        printf("Processing login\n");
+                        if(process_login(current_sd, argv[1], user_names[i], &(users_logged_in[i]))){
                             // Error processing client
                             close(current_sd);
                             client_socket[i] = 0;
                         }
                     }
                     else{
-                        if (process_client(current_sd, user_names, client_socket, i, course_list_path, working_directory)){
+                        printf("Processing request\n");
+                        if (process_client(current_sd, user_names, users_logged_in, client_socket, i, course_list_path, working_directory)){
                             close(current_sd);
                             client_socket[i] = 0;
+                            users_logged_in[i] = 0;
                             memset(user_names[i], 0, strlen(user_names[i]));
                         }
                     }

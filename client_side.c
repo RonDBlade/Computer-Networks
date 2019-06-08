@@ -30,8 +30,12 @@ int read_header(int conn_fd, char *header){
     int current_pass = 0;
     while (bytes_passed < MAX_CHARS_EXPECTED){
         current_pass = read(conn_fd, header + bytes_passed, MAX_CHARS_EXPECTED - bytes_passed);
-        if (current_pass <= 0)
-            return 1;
+        if (current_pass <= 0){
+			if (current_pass == 0){
+				close(conn_fd);
+			}
+			return 1;
+		}
         bytes_passed += current_pass;
     }
     header[bytes_passed] = '\0';
@@ -57,8 +61,12 @@ int read_message(int conn_fd, char* buffer, unsigned int buff_size){
     int current_pass = 0;
     while (bytes_passed < buff_size){
         current_pass = read(conn_fd, buffer + bytes_passed, buff_size - bytes_passed);
-        if (current_pass <= 0)
-            return 1;
+        if (current_pass <= 0){
+			if (current_pass == 0){
+				close(conn_fd);
+			}
+			return 1;
+		}
         bytes_passed += current_pass;
     }
     buffer[bytes_passed] = '\0';
@@ -82,11 +90,13 @@ int write_message(int conn_fd, char* buffer, unsigned int buff_size){
 int read_from_server(int conn_fd, char* buffer){//USE THIS TO READ FROM SERVER.OTHERS ARE HELPER FUNCTIONS
     unsigned int message_length;
     char header[MAX_CHARS_EXPECTED] = {0};
+	printf("Waiting here\n");
     if (read_header(conn_fd, header)){
         perror("Error reading header from server\n");
         return 1;
     }
     message_length = strtoul(header, NULL, 10);
+	printf("Or waiting here\n");
     if (read_message(conn_fd, buffer, message_length)){
         perror("Error reading message\n");
         return 1;
@@ -97,7 +107,7 @@ int read_from_server(int conn_fd, char* buffer){//USE THIS TO READ FROM SERVER.O
 int write_to_server(int conn_fd, char* buffer){//USE THIS TO WRITE TO SERVER.OTHERS ARE HELPER FUNCTIONS
     unsigned int message_length = strlen(buffer);
     char header[MAX_CHARS_EXPECTED] = {0};
-    sprintf(header, "%010u", message_length);
+    snprintf(header, MAX_CHARS_EXPECTED, "%010u", message_length);
     if (write_header(conn_fd, header)){
         perror("Error writing header to server\n");
         return 1;
@@ -156,6 +166,7 @@ int main(int argc, char *argv[]){
     char course_name[MAX_COURSE_NAME];
 	char rating_value[4];
     char rating_text[MAX_RATE_TEXT];
+	char broadcast_message[MAX_BROADCAST_LENGTH];
 	
     struct sockaddr_in server_address;
 	struct hostent *he;
@@ -163,6 +174,8 @@ int main(int argc, char *argv[]){
 	
 	fd_set reads_fds;
 	int ready_to_read;
+
+	unsigned int i;
 
     if(argc==1){
 		hostname = "localhost";
@@ -219,7 +232,7 @@ int main(int argc, char *argv[]){
             continue;
         }
         token=strtok(NULL,delimiter);
-        strcpy(user,token);//assume user length is 15 or less
+        snprintf(user, MAX_USER_INPUT, "%s", token);//assume user length is 15 or less
         if(strtok(NULL,delimiter)!=NULL){//more than just "User:" and username
             printf("Invalid input,please enter username\n");
             continue;
@@ -233,7 +246,7 @@ int main(int argc, char *argv[]){
             continue;
         }
         token=strtok(NULL,delimiter);
-        strcpy(password,token);//assume user length is 15 or less
+        snprintf(password, MAX_USER_INPUT, "%s", token);//assume user length is 15 or less
         if(strtok(NULL,delimiter)!=NULL){//more than just "Password:" and password
             printf("Invalid input,please enter password\n");
 			memset(user, 0 ,MAX_USER_INPUT);
@@ -241,15 +254,19 @@ int main(int argc, char *argv[]){
             continue;
         }
 		// If we got here, the user entered user_name and password correctley, we send them to the server for authentication
+		printf("Send user\n");
 		if (write_to_server(sockfd, user)){
 			return 1;
 		}
+		printf("Send password\n");
 		if (write_to_server(sockfd, password)){
 			return 1;
 		}
+		printf("Read server\n");
 		if (read_from_server(sockfd, server_response)){
 			return 1;
 		}
+		printf("Checking response\n");
 		if(!strcmp(server_response, "0")){// Server sends 0 on log in, and 1 otherwise, so we ask for another username+password input.
 			printf("Hi %s, good to see you.\n", user);
 			break;
@@ -263,13 +280,16 @@ int main(int argc, char *argv[]){
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
     //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;
+		printf("Waiting for input\n");
 		ready_to_read = select(sockfd + 1, &reads_fds, NULL, NULL, NULL);
-		if (ready_to_read< 0){
+		printf("Caught %d inputs\n", ready_to_read);
+		if (ready_to_read < 0){
 			perror("Error doing select\n");
 			close(sockfd);
 			return 1;
 		}
 		if (FD_ISSET(sockfd, &reads_fds)){
+			printf("Caught server input\n");
 			if (read_from_server(sockfd, server_response)){
 				continue;
 			}
@@ -279,36 +299,41 @@ int main(int argc, char *argv[]){
 				}
 			}
 			else if (!strcmp(server_response, "2")){
-				printf("A new course was just added!");
+				printf("A new course was just added!\n");
+				continue;
 			}
 		}
 		if (FD_ISSET(0, &reads_fds)){
+			printf("Caught user input\n");
 			memset(input, 0 ,11 + MAX_RATE_TEXT + MAX_COURSE_NUMBER + 3 + 1);
 			memset(cmd, 0, MAX_CMD_LENGTH);
 			getline(&buff1,&len,stdin);
 			token=strtok(buff1,delimiter);
+			if (!token){
+				continue;
+			}
 			//now lets check what command he has entered
 			if(!strcmp(token,"list_of_courses")){
 				if(strtok(NULL,delimiter)!=NULL){
 					printf("Invalid input\n");
 					continue;
 				}
-				strcpy(cmd,token);
+				snprintf(cmd, MAX_CMD_LENGTH, "%s", token);
 				if (write_to_server(sockfd, cmd)){
 					continue;
 				}
 				if (read_file_from_server(sockfd) == -1){
-					printf("There are no courses in database yet.\n");
+					printf("There are no courses in the database yet.\n");
 				}
 			}
 			else if(!strcmp(token,"add_course")){
 				memset(course_number, 0, MAX_COURSE_NUMBER);
 				memset(course_name, 0, MAX_COURSE_NAME);			
-				strcpy(cmd,token);
+				snprintf(cmd, MAX_CMD_LENGTH, "%s", token);
 				token=strtok(NULL,delimiter);
-				strcpy(course_number,token);
+				snprintf(course_number, MAX_COURSE_NUMBER, "%s", token);
 				token=strtok(NULL,delimiter);
-				strcpy(course_name,token);
+				snprintf(course_name, MAX_COURSE_NAME, "%s", token);
 				if(strtok(NULL,delimiter)!=NULL){
 					printf("Invalid input\n");
 					continue;
@@ -340,13 +365,13 @@ int main(int argc, char *argv[]){
 				memset(course_number, 0, MAX_COURSE_NUMBER);
 				memset(rating_value, 0, 4);
 				memset(rating_text, 0, MAX_RATE_TEXT);
-				strcpy(cmd,token);
+				snprintf(cmd, MAX_CMD_LENGTH, "%s", token);
 				token=strtok(NULL,delimiter);
-				strcpy(course_number,token);
+				snprintf(course_number, MAX_COURSE_NUMBER, "%s", token);
 				token=strtok(NULL,delimiter);
-				strcpy(rating_value,token);
+				snprintf(rating_value, 4, "%s", token);
 				token=strtok(NULL,delimiter);
-				strcpy(rating_text,token);
+				snprintf(rating_text, MAX_RATE_TEXT, "%s", token);
 				if(strtok(NULL,delimiter)!=NULL){
 					printf("Invalid input\n");
 					continue;
@@ -376,9 +401,9 @@ int main(int argc, char *argv[]){
 			}
 			else if(!strcmp(token,"get_rate")){
 				memset(course_number, 0, MAX_COURSE_NUMBER);
-				strcpy(cmd,token);
+				snprintf(cmd, MAX_CMD_LENGTH, "%s", token);
 				token=strtok(NULL,delimiter);
-				strcpy(course_number,token);
+				snprintf(course_number, MAX_COURSE_NUMBER, "%s", token);
 				if(strtok(NULL,delimiter)!=NULL){
 					printf("Invalid input\n");
 					continue;
@@ -400,8 +425,33 @@ int main(int argc, char *argv[]){
 					printf("The course have no ratings yet.\n");
 				}
 			}
+			else if(!strcmp(token,"broadcast")){
+				memset(broadcast_message, 0, MAX_BROADCAST_LENGTH);
+				snprintf(cmd, MAX_CMD_LENGTH, "%s", token);
+				token=strtok(NULL,delimiter);
+				snprintf(broadcast_message, MAX_BROADCAST_LENGTH, "%s", token);
+				if(strtok(NULL,delimiter)!=NULL){
+					printf("Invalid input\n");
+					continue;
+				}
+				if ((broadcast_message[0] != '"') || (broadcast_message[strlen(broadcast_message)-1] != '"')){
+					printf("Invalid input\n");
+					continue;
+				}
+				// Remove quotation marks
+				for(i = 0; i < strlen(broadcast_message) - 1; i++){
+					broadcast_message[i] = broadcast_message[i+1];
+				}
+				broadcast_message[i-1] = '\0';
+				if (write_to_server(sockfd, cmd)){
+					continue;
+				}
+				if (write_to_server(sockfd, broadcast_message)){
+					continue;
+				}
+			}
 			else if(!strcmp(token,"quit")){
-				strcpy(cmd,token);
+				snprintf(cmd, MAX_CMD_LENGTH, "%s", token);
 				if(strtok(NULL,delimiter)!=NULL){
 					printf("Invalid input\n");
 					continue;
@@ -409,7 +459,7 @@ int main(int argc, char *argv[]){
 				if (write_to_server(sockfd, cmd)){
 					continue;
 				}
-				break; // We exit te while loop and close the socket
+				break; // We exit the while loop and close the socket
 			}
 			else{
 				printf("Illegal command.\n");
