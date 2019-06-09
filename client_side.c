@@ -90,13 +90,11 @@ int write_message(int conn_fd, char* buffer, unsigned int buff_size){
 int read_from_server(int conn_fd, char* buffer){//USE THIS TO READ FROM SERVER.OTHERS ARE HELPER FUNCTIONS
     unsigned int message_length;
     char header[MAX_CHARS_EXPECTED] = {0};
-	printf("Waiting here\n");
     if (read_header(conn_fd, header)){
         perror("Error reading header from server\n");
         return 1;
     }
     message_length = strtoul(header, NULL, 10);
-	printf("Or waiting here\n");
     if (read_message(conn_fd, buffer, message_length)){
         perror("Error reading message\n");
         return 1;
@@ -254,57 +252,45 @@ int main(int argc, char *argv[]){
             continue;
         }
 		// If we got here, the user entered user_name and password correctley, we send them to the server for authentication
-		printf("Send user\n");
 		if (write_to_server(sockfd, user)){
 			return 1;
 		}
-		printf("Send password\n");
 		if (write_to_server(sockfd, password)){
 			return 1;
 		}
-		printf("Read server\n");
 		if (read_from_server(sockfd, server_response)){
 			return 1;
 		}
-		printf("Checking response\n");
 		if(!strcmp(server_response, "0")){// Server sends 0 on log in, and 1 otherwise, so we ask for another username+password input.
 			printf("Hi %s, good to see you.\n", user);
 			break;
 		}
 		printf("Failed to login.\n");
     }
-	//Initalize select o wait for input from server or user input
-	FD_ZERO(&reads_fds);
-	FD_SET(0, &reads_fds);
-	FD_SET(sockfd, &reads_fds);
     //THEN WHILE LOOP OF USERCOMMANDS TILL USER TYPES QUIT
-    //Converting the length to a fixed char* to send to server total chars to read as header
     while(1){//when user inputs "quit",do break;
-		printf("Waiting for input\n");
+		//Initalize select o wait for input from server or user input
+		FD_ZERO(&reads_fds);
+		FD_SET(0, &reads_fds);
+		FD_SET(sockfd, &reads_fds);
 		ready_to_read = select(sockfd + 1, &reads_fds, NULL, NULL, NULL);
-		printf("Caught %d inputs\n", ready_to_read);
 		if (ready_to_read < 0){
 			perror("Error doing select\n");
 			close(sockfd);
 			return 1;
 		}
 		if (FD_ISSET(sockfd, &reads_fds)){
-			printf("Caught server input\n");
 			if (read_from_server(sockfd, server_response)){
 				continue;
 			}
 			if (!strcmp(server_response, "1")){
-				if (read_broadcast_from_server(sockfd)){
-					continue;
-				}
+				read_broadcast_from_server(sockfd);
 			}
 			else if (!strcmp(server_response, "2")){
 				printf("A new course was just added!\n");
-				continue;
 			}
 		}
 		if (FD_ISSET(0, &reads_fds)){
-			printf("Caught user input\n");
 			memset(input, 0 ,11 + MAX_RATE_TEXT + MAX_COURSE_NUMBER + 3 + 1);
 			memset(cmd, 0, MAX_CMD_LENGTH);
 			getline(&buff1,&len,stdin);
@@ -459,7 +445,12 @@ int main(int argc, char *argv[]){
 				if (write_to_server(sockfd, cmd)){
 					continue;
 				}
-				break; // We exit the while loop and close the socket
+				if (read_from_server(sockfd, server_response)){
+					continue;
+				}
+				if (!strcmp(server_response, "0")){	
+					break; // We exit the while loop and close the socket
+				}
 			}
 			else{
 				printf("Illegal command.\n");

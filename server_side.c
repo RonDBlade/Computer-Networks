@@ -318,11 +318,8 @@ int broadcast_message(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPU
     if(read_from_client(conn_fd, message)){
         return 1;
     }
-    printf("Broadcasting message: %s\n", message);
     for(i = 0; i < MAX_CONNECTIONS; i++){
-        printf("Going through user %d\n", i);
         if ((users_logged_in[i] != 0) && (strcmp(user_list[i], user_name))){
-            printf("Sending user %d\n", i);
             write_to_client(socket_list[i], "1");
             write_to_client(socket_list[i], user_name);
             write_to_client(socket_list[i], message);
@@ -362,6 +359,7 @@ int process_client(int conn_fd, char user_list[MAX_CONNECTIONS][MAX_USER_INPUT],
         }
     }
 	else if(!strcmp(input_cmd, "quit")){
+        write_to_client(conn_fd, "0");
         close(conn_fd);
         socket_list[client_index] = 0;
         users_logged_in[client_index] = 0;
@@ -435,19 +433,15 @@ int main(int argc, char *argv[]){
         for (i = 0; i < MAX_CONNECTIONS; i++){
             current_sd = client_socket[i];
             if (current_sd > 0){
-                printf("Registered socket number %d\n", i);
                 FD_SET(current_sd, &read_fds);
             }
             if (current_sd > max_fd){
-                printf("Changing %d to %d\n", max_fd, current_sd);
                 max_fd = current_sd;
             }
         }
-        printf("Trying to select, max = %d\n", max_fd);
         if(select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0){
             perror("Error while using select");
         }
-        printf("Select succeed\n");
         if(FD_ISSET(listen_fd, &read_fds)){
             conn_fd = accept(listen_fd, (struct sockaddr*) &peer_address, &address_size);
             if (conn_fd < 0){
@@ -469,17 +463,15 @@ int main(int argc, char *argv[]){
             for (i = 0; i < MAX_CONNECTIONS; i++){
                 current_sd = client_socket[i];
                 if (FD_ISSET(current_sd, &read_fds)){
-                    printf("Reading from socket number %d\n", i);
                     if (users_logged_in[i] == 0){
-                        printf("Processing login\n");
                         if(process_login(current_sd, argv[1], user_names[i], &(users_logged_in[i]))){
                             // Error processing client
+                            users_logged_in[i] = 0;
                             close(current_sd);
                             client_socket[i] = 0;
                         }
                     }
                     else{
-                        printf("Processing request\n");
                         if (process_client(current_sd, user_names, users_logged_in, client_socket, i, course_list_path, working_directory)){
                             close(current_sd);
                             client_socket[i] = 0;
